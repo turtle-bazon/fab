@@ -9,7 +9,9 @@
 (defstruct (ir-unop (:constructor ir-unop (op arg))) op arg)
 (defstruct (ir-bitselect (:constructor ir-bitselect (signal index))) signal index)
 (defstruct (ir-partselect (:constructor ir-partselect (signal hi lo))) signal hi lo)
+(defstruct (ir-concat (:constructor ir-concat (items))) items)
 (defstruct (ir-funcall (:constructor ir-funcall (name args))) name args)
+(defstruct (ir-if-expr (:constructor ir-if-expr (cond then else))) cond then else)
 
 ;;; Statements
 
@@ -19,6 +21,7 @@
 (defstruct (ir-case (:constructor ir-case (key cases default))) key cases default)
 (defstruct (ir-begin (:constructor ir-begin (body))) body)
 (defstruct (ir-task-call (:constructor ir-task-call (name args))) name args)
+(defstruct (ir-for (:constructor ir-for (var init cond step body))) var init cond step body)
 
 ;;; Module items
 

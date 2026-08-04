@@ -48,14 +48,20 @@
                            (verilog-ident (if (ir-ref-p (ir-partselect-signal expr))
                                              (ir-ref-name (ir-partselect-signal expr))
                                              (ir-partselect-signal expr)))
-                           (ir-partselect-hi expr)
-                           (ir-partselect-lo expr)))
+                           (emit-expr-to-string (ir-partselect-hi expr))
+                           (emit-expr-to-string (ir-partselect-lo expr))))
+    (ir-concat (format stream "{~{~a~^, ~}}"
+                       (mapcar #'emit-expr-to-string (ir-concat-items expr))))
     (ir-funcall
      (let ((args (ir-funcall-args expr)))
        (if args
            (format stream "~a(~a)" (verilog-ident (ir-funcall-name expr))
                    (format nil "~{~a~^, ~}" (mapcar #'emit-expr-to-string args)))
            (format stream "~a" (verilog-ident (ir-funcall-name expr))))))
+    (ir-if-expr (format stream "(~a ? ~a : ~a)"
+                        (emit-expr-to-string (ir-if-expr-cond expr))
+                        (emit-expr-to-string (ir-if-expr-then expr))
+                        (emit-expr-to-string (ir-if-expr-else expr))))
     (ir-system-call
      (let ((args (ir-system-call-args expr)))
        (if args
@@ -178,13 +184,26 @@
        (if args
            (emit stream "~a(~a);" (verilog-ident (ir-task-call-name stmt))
                  (format nil "~{~a~^, ~}" (mapcar #'emit-expr-to-string args)))
-           (emit stream "~a;" (verilog-ident (ir-task-call-name stmt))))))))
+           (emit stream "~a;" (verilog-ident (ir-task-call-name stmt))))))
+    (ir-for
+     (emit stream "for (~a = ~a; ~a; ~a)"
+           (emit-expr-to-string (ir-for-var stmt))
+           (emit-expr-to-string (ir-for-init stmt))
+           (emit-expr-to-string (ir-for-cond stmt))
+           (emit-expr-to-string (ir-for-step stmt)))
+     (indent
+       (emit-stmt stream (ir-for-body stmt))))))
 
 (defun emit-always (stream ab)
   (let ((sensitivity (ir-always-sensitivity ab)))
     (emit stream "always @(~a)" (emit-sensitivity sensitivity))
     (indent
       (emit-stmt stream (ir-always-body ab)))))
+
+(defun emit-always-comb (stream ab)
+  (emit stream "always @*")
+  (indent
+    (emit-stmt stream (ir-always-comb-body ab))))
 
 (defun emit-task (stream task)
   "Emit a task definition."
@@ -224,13 +243,15 @@
 
 (defun emit-module (stream mod)
   "Emit a complete module to STREAM."
-  (let ((name (ir-module-name mod))
+    (let ((name (ir-module-name mod))
         (ports '())
         (params '())
         (localparams '())
         (signals '())
         (assigns '())
         (always-blocks '())
+        (always-comb-blocks '())
+        (instances '())
         (tasks (ir-module-tasks mod))
         (functions (ir-module-functions mod)))
     ;; Classify items
@@ -241,13 +262,17 @@
         (ir-localparam (push item localparams))
         (ir-signal (push item signals))
         (ir-cont-assign (push item assigns))
-        (ir-always (push item always-blocks))))
+        (ir-always (push item always-blocks))
+        (ir-always-comb (push item always-comb-blocks))
+        (ir-instance (push item instances))))
     (setf ports (nreverse ports)
           params (nreverse params)
           localparams (nreverse localparams)
           signals (nreverse signals)
           assigns (nreverse assigns)
-          always-blocks (nreverse always-blocks))
+          always-blocks (nreverse always-blocks)
+          always-comb-blocks (nreverse always-comb-blocks)
+          instances (nreverse instances))
     ;; Module header
     (emit stream "module ~a (" (verilog-ident name))
     (loop for (p . rest) on ports
@@ -295,6 +320,16 @@
       (terpri stream)
       (dolist (ab always-blocks)
         (emit-always stream ab)))
+    ;; Always combinational blocks
+    (when always-comb-blocks
+      (terpri stream)
+      (dolist (ab always-comb-blocks)
+        (emit-always-comb stream ab)))
+    ;; Instances
+    (when instances
+      (terpri stream)
+      (dolist (inst instances)
+        (emit-instance stream inst)))
     ;; End module
     (emit stream "endmodule")))
 
@@ -305,14 +340,14 @@
         (params (ir-instance-params inst))
         (ports (ir-instance-ports inst)))
     (if params
-        (format stream "~a #(" (verilog-ident module))
-        (format stream "~a " (verilog-ident module)))
-    (when params
-      (format stream "~%")
-      (loop for (p . rest) on params
-            do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
-                       (if rest "," ""))))
-    (format stream ") ~a (~%" (verilog-ident name))
+        (progn
+          (format stream "~a #(" (verilog-ident module))
+          (format stream "~%")
+          (loop for (p . rest) on params
+                do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
+                           (if rest "," "")))
+          (format stream ") ~a (~%" (verilog-ident name)))
+        (format stream "~a ~a (~%" (verilog-ident module) (verilog-ident name)))
     (loop for (p . rest) on ports
           do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
                      (if rest "," "")))
@@ -344,7 +379,7 @@
           (ir-initial (emit-stmt stream item))
           (ir-always (emit-always stream item))
           (ir-always-comb (emit-stmt stream item))
-           (ir-instance (emit-instance stream item)))))
+          (ir-instance (emit-instance stream item)))))
     (emit stream "endmodule")))
 
 (defun emit-cst (stream mod board)

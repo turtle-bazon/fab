@@ -1,7 +1,8 @@
 (in-package :fab)
 
 (fab
- (module z80-top
+ (module z80
+   :board tangnano9k
    :ports ((clk :input) (rst :input) (led :output)
            (uart-tx :output))
    :signals ((led-state :reg)

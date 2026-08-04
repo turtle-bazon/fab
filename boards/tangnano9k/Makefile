@@ -16,7 +16,7 @@ TOP_V    = $(subst -,_,$(shell echo $(TOP) | tr a-z A-Z))
 all: $(BUILD)/$(TOP).fs
 
 $(BUILD)/$(TOP).json: $(BUILD)/$(TOP_V).v $(BUILD)/$(TOP_V).cst
-	yosys -p "read_verilog $(BUILD)/$(TOP_V).v; synth_gowin -json $@ -top $(TOP_V)"
+	yosys -p "read_verilog $(BUILD)/*.v; synth_gowin -json $@ -top $(TOP_V)"
 
 $(BUILD)/$(TOP)_pnr.json: $(BUILD)/$(TOP).json $(BUILD)/$(TOP_V).cst
 	yowasp-nextpnr-gowin --device $(DEVICE) --family $(FAMILY) --cst $(BUILD)/$(TOP_V).cst --json $< --write $@

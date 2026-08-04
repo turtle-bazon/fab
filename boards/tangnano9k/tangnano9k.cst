@@ -1,0 +1,17 @@
+// Tang Nano 9K constraints for (fab) UART sender
+// GW1NR-LV9QN88PC6/I5
+// Bank 1 (right, 3.3V): CLK on pin 52
+// Bank 2 (bottom): UART_TX on pin 17, UART_RX on pin 18
+// Bank 3 (left, 1.8V): LEDs on pins 10-16, buttons on pins 3-4
+
+IO_LOC "CLK" 52;
+IO_PORT "CLK" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+IO_LOC "UART_TX" 17;
+IO_PORT "UART_TX" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "UART_RX" 18;
+IO_PORT "UART_RX" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+IO_LOC "LED" 10;
+IO_PORT "LED" PULL_MODE=UP DRIVE=8;

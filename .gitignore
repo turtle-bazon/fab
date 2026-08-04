@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+
+# Lisp
+*.fasl
+*.dx64fsl
+*.lx64fsl
+*.dfsl
+*.pfsl
+*.d64fsl
+*.p64fsl
+*.lsp64
+*.abcl
+*.jar
+
+# Backup files
+*~
+*.bak
+*.orig
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

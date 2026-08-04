@@ -23,7 +23,10 @@
 (defun emit-expr (stream expr)
   "Emit an expression node to STREAM."
   (etypecase expr
-    (ir-num (format stream "~a" (ir-num-value expr)))
+    (ir-num (let ((val (ir-num-value expr)))
+              (if (and (>= val 32) (<= val 126))
+                  (format stream "~a /* ~a */" val (code-char val))
+                  (format stream "~a" val))))
     (ir-str (format stream "\"~a\"" (ir-str-value expr)))
     (ir-ref (let ((name (ir-ref-name expr)))
               (if (and (symbolp name) (> (length (symbol-name name)) 0) (char= (char (symbol-name name) 0) #\$))
@@ -47,6 +50,12 @@
                                              (ir-partselect-signal expr)))
                            (ir-partselect-hi expr)
                            (ir-partselect-lo expr)))
+    (ir-funcall
+     (let ((args (ir-funcall-args expr)))
+       (if args
+           (format stream "~a(~a)" (verilog-ident (ir-funcall-name expr))
+                   (format nil "~{~a~^, ~}" (mapcar #'emit-expr-to-string args)))
+           (format stream "~a" (verilog-ident (ir-funcall-name expr))))))
     (ir-system-call
      (let ((args (ir-system-call-args expr)))
        (if args
@@ -86,6 +95,17 @@
                                                                (second a)))))
                       attrs)))
     (emit stream "~a ~a~a;" kind (or range "") (verilog-ident (ir-signal-name sig)))))
+
+(defun emit-initial-block (stream signals)
+  "Emit an initial block for signals with :init values."
+  (let ((inits (remove-if-not #'ir-signal-init signals)))
+    (when inits
+      (terpri stream)
+      (emit stream "initial begin")
+      (dolist (s inits)
+        (format stream "  ~a = ~a;~%" (verilog-ident (ir-signal-name s))
+                (emit-expr-to-string (ir-signal-init s))))
+      (emit stream "end"))))
 
 (defun emit-param (stream p)
   (emit stream "parameter ~a = ~a;" (verilog-ident (ir-param-name p)) (emit-expr-to-string (ir-param-value p))))
@@ -152,13 +172,44 @@
     (ir-forever
      (emit stream "forever")
      (indent
-       (emit-stmt stream (ir-forever-body stmt))))))
+       (emit-stmt stream (ir-forever-body stmt))))
+    (ir-task-call
+     (let ((args (ir-task-call-args stmt)))
+       (if args
+           (emit stream "~a(~a);" (verilog-ident (ir-task-call-name stmt))
+                 (format nil "~{~a~^, ~}" (mapcar #'emit-expr-to-string args)))
+           (emit stream "~a;" (verilog-ident (ir-task-call-name stmt))))))))
 
 (defun emit-always (stream ab)
   (let ((sensitivity (ir-always-sensitivity ab)))
     (emit stream "always @(~a)" (emit-sensitivity sensitivity))
     (indent
       (emit-stmt stream (ir-always-body ab)))))
+
+(defun emit-task (stream task)
+  "Emit a task definition."
+  (emit stream "task ~a;" (verilog-ident (ir-task-name task)))
+  (when (ir-task-params task)
+    (dolist (p (ir-task-params task))
+      (emit stream "  input ~a~a;" (or (width-range (ir-port-width p)) "") (verilog-ident (ir-port-name p)))))
+  (indent
+    (dolist (s (ir-task-body task))
+      (emit-stmt stream s)))
+  (emit stream "endtask"))
+
+(defun emit-function (stream func)
+  "Emit a function definition."
+  (let ((ret-width (cdr (ir-function-ret-width func))))
+    (emit stream "function ~a~a;"
+          (or (width-range ret-width) "")
+          (verilog-ident (ir-function-name func))))
+  (when (ir-function-params func)
+    (dolist (p (ir-function-params func))
+      (emit stream "  input ~a~a;" (or (width-range (ir-port-width p)) "") (verilog-ident (ir-port-name p)))))
+  (indent
+    (dolist (s (ir-function-body func))
+      (emit-stmt stream s)))
+  (emit stream "endfunction"))
 
 (defun emit-sensitivity (sensitivity)
   "Emit a sensitivity list. Sensitivity is a list like ((posedge clk)) or :*."
@@ -179,7 +230,9 @@
         (localparams '())
         (signals '())
         (assigns '())
-        (always-blocks '()))
+        (always-blocks '())
+        (tasks (ir-module-tasks mod))
+        (functions (ir-module-functions mod)))
     ;; Classify items
     (dolist (item (ir-module-items mod))
       (etypecase item
@@ -220,6 +273,18 @@
       (terpri stream)
       (dolist (s signals)
         (emit-signal stream s)))
+    ;; Initial values
+    (emit-initial-block stream signals)
+    ;; Tasks
+    (when tasks
+      (terpri stream)
+      (dolist (task tasks)
+        (emit-task stream task)))
+    ;; Functions
+    (when functions
+      (terpri stream)
+      (dolist (func functions)
+        (emit-function stream func)))
     ;; Continuous assigns
     (when assigns
       (terpri stream)
@@ -279,5 +344,27 @@
           (ir-initial (emit-stmt stream item))
           (ir-always (emit-always stream item))
           (ir-always-comb (emit-stmt stream item))
-          (ir-instance (emit-instance stream item)))))
+           (ir-instance (emit-instance stream item)))))
     (emit stream "endmodule")))
+
+(defun emit-cst (stream mod board)
+  "Emit a Gowin CST constraint file for MOD using BOARD definitions."
+  (let ((clock-pin (ir-board-clock board))
+        (pins (ir-board-pins board))
+        (ports (remove-if-not #'ir-port-p (ir-module-items mod))))
+    ;; Map port names to pin numbers
+    (let ((pin-map (make-hash-table :test 'equal)))
+      (dolist (p pins)
+        (setf (gethash (string-downcase (symbol-name (car p))) pin-map) (cadr p)))
+      ;; Emit clock constraint
+      (when clock-pin
+        (let ((clk-port (find-if (lambda (p) (string= (symbol-name (ir-port-name p)) "CLK"))
+                                 ports)))
+          (when clk-port
+            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident (ir-port-name clk-port)) clock-pin))))
+      ;; Emit other pin constraints
+      (dolist (port ports)
+        (let* ((name (ir-port-name port))
+               (pin-num (gethash (string-downcase (symbol-name name)) pin-map)))
+          (when pin-num
+            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident name) pin-num)))))))

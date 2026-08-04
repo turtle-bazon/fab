@@ -9,6 +9,7 @@
 (defstruct (ir-unop (:constructor ir-unop (op arg))) op arg)
 (defstruct (ir-bitselect (:constructor ir-bitselect (signal index))) signal index)
 (defstruct (ir-partselect (:constructor ir-partselect (signal hi lo))) signal hi lo)
+(defstruct (ir-funcall (:constructor ir-funcall (name args))) name args)
 
 ;;; Statements
 
@@ -17,15 +18,18 @@
 (defstruct (ir-if (:constructor ir-if (cond then else))) cond then else)
 (defstruct (ir-case (:constructor ir-case (key cases default))) key cases default)
 (defstruct (ir-begin (:constructor ir-begin (body))) body)
+(defstruct (ir-task-call (:constructor ir-task-call (name args))) name args)
 
 ;;; Module items
 
 (defstruct (ir-port (:constructor ir-port (name direction width))) name direction width)
-(defstruct (ir-signal (:constructor ir-signal (name kind width attrs))) name kind width attrs)
+(defstruct (ir-signal (:constructor ir-signal (name kind width attrs init))) name kind width attrs init)
 (defstruct (ir-param (:constructor ir-param (name value))) name value)
 (defstruct (ir-localparam (:constructor ir-localparam (name value))) name value)
 (defstruct (ir-always (:constructor ir-always (sensitivity body))) sensitivity body)
 (defstruct (ir-cont-assign (:constructor ir-cont-assign (lhs rhs))) lhs rhs)
+(defstruct (ir-task (:constructor ir-task (name params body))) name params body)
+(defstruct (ir-function (:constructor ir-function (name params ret-width body))) name params ret-width body)
 
 ;;; Testbench constructs
 
@@ -38,5 +42,6 @@
 
 ;;; Top level
 
-(defstruct (ir-module (:constructor ir-module (name items))) name items)
+(defstruct (ir-board (:constructor ir-board (name device family clock pins))) name device family clock pins)
+(defstruct (ir-module (:constructor ir-module (name board items tasks functions))) name board items tasks functions)
 (defstruct (ir-testbench (:constructor ir-testbench (name items))) name items)

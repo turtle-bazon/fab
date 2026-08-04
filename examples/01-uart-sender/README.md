@@ -11,33 +11,7 @@ The FPGA runs at 27 MHz using the onboard oscillator (no PLL).
 
 ## Usage
 
-Generate Verilog:
-
-```lisp
-(asdf:load-system :fab)
-(load "examples/01-uart-sender/uart-sender.lisp")
-;; => writes build/UART_SENDER.v
-
-(load "examples/01-uart-sender/tb.lisp")
-;; => writes build/TB_UART_SENDER.v
-```
-
-To redirect output to a different directory:
-
-```lisp
-(let ((*output-dir* "rtl"))
-  (load "examples/01-uart-sender/uart-sender.lisp"))
-;; => writes rtl/UART_SENDER.v
-```
-
-Simulate (requires iverilog):
-
-```sh
-iverilog -o build/sim_tb.vvp build/UART_SENDER.v build/TB_UART_SENDER.v
-vvp build/sim_tb.vvp
-```
-
-Build bitstream:
+Build bitstream (generates both `.v` and `.cst`):
 
 ```sh
 make DESIGN=examples/01-uart-sender/uart-sender.lisp
@@ -61,12 +35,22 @@ cat /dev/ttyUSB1
 ### Design modules
 ```lisp
 (fab
- (module name
+ (module name :board :board-name
    :ports ((name :input) (name :output))
    :params ((name value))
-   :signals ((name :reg width))
+   :signals ((name :reg width) (name :reg 2 :attrs ((fsm_encoding "binary"))))
    :assigns ((lhs rhs))
    :body ((always (posedge clk) ...))))
+```
+
+### Board definitions
+```lisp
+(fab
+ (board name
+   :device "GW1NR-LV9QN88PC6/I5"
+   :family "GW1N-9C"
+   :clock 52
+   :pins ((uart-tx 17) (uart-rx 18) (led 10))))
 ```
 
 ### Testbenches

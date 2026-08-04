@@ -29,10 +29,12 @@ all: fab
 
 fab: $(BUILD)/$(TOP_V).v
 
-$(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd
+$(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp
+	mkdir -p $(BUILD)
 	sbcl --noinform --non-interactive \
 	  --eval '(require :asdf)' \
 	  --eval '(asdf:load-system :fab)' \
+	  --eval '(load "boards/$(BOARD)/$(BOARD).lisp")' \
 	  --eval '(load "$(DESIGN)")' \
 	  $(if $(TB_EXISTS),--eval '(load "$(TB_FILE)")',)
 

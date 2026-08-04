@@ -15,14 +15,14 @@ TOP_V    = $(subst -,_,$(shell echo $(TOP) | tr a-z A-Z))
 
 all: $(BUILD)/$(TOP).fs
 
-$(BUILD)/$(TOP).json: $(BUILD)/$(TOP_V).v tangnano9k.cst
+$(BUILD)/$(TOP).json: $(BUILD)/$(TOP_V).v $(BUILD)/$(TOP_V).cst
 	yosys -p "read_verilog $(BUILD)/$(TOP_V).v; synth_gowin -json $@ -top $(TOP_V)"
 
-$(BUILD)/$(TOP)_pnr.json: $(BUILD)/$(TOP).json tangnano9k.cst
-	yowasp-nextpnr-gowin --device $(DEVICE) --family $(FAMILY) --cst tangnano9k.cst --json $< --write $@
+$(BUILD)/$(TOP)_pnr.json: $(BUILD)/$(TOP).json $(BUILD)/$(TOP_V).cst
+	yowasp-nextpnr-gowin --device $(DEVICE) --family $(FAMILY) --cst $(BUILD)/$(TOP_V).cst --json $< --write $@
 
 $(BUILD)/$(TOP).fs: $(BUILD)/$(TOP)_pnr.json
 	gowin_pack -d $(FAMILY) -o $@ $<
 
 clean:
-	rm -f $(BUILD)/$(TOP).json $(BUILD)/$(TOP)_pnr.json $(BUILD)/$(TOP).fs
+	rm -f $(BUILD)/$(TOP).json $(BUILD)/$(TOP)_pnr.json $(BUILD)/$(TOP).fs $(BUILD)/$(TOP_V).cst

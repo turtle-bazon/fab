@@ -26,6 +26,6 @@
         (9 (setf res (- a-in 1))
            (setf flags (logor (logand flags-in #xED) (logor (logand (if (< (logand a-in #x0F) 1) 1 0) #x10) (logor (logand (if (= a-in #x80) 1 0) #x04) (logor (logand (if (= res 0) 1 0) #x40) (logand (bit res 7) #x80)))))))
         (14 (setf res (lognot a-in))
-            (setf flags (logor (logand flags-in #xED) #x10)))
-         )))
+            (setf flags (logor (logand flags-in #xED) #x10)))))
+   )
    :assigns ((result res) (flags-out flags))))

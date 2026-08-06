@@ -1,0 +1,232 @@
+;;; USB Full Speed (12Mbps) bit-level transceiver
+;;; Adapted from WangXuan95/FPGA-USB-Device for 27MHz clock (Tang Nano 9K)
+
+(in-package :fab)
+
+(fab
+ (module usbfs-bitlevel
+   :ports ((rstn :input)
+           (clk :input)
+           (usb-oe :output :reg)
+           (usb-dp-tx :output :reg)
+           (usb-dn-tx :output :reg)
+           (usb-dp-rx :input)
+           (usb-dn-rx :input)
+           (rx-sta :output :reg)
+           (rx-ena :output :reg)
+           (rx-bit :output :reg)
+           (rx-fin :output :reg)
+           (tx-sta :input)
+           (tx-req :output :reg)
+           (tx-bit :input)
+           (tx-fin :input))
+   :localparams ((cntj-before-rx 7)
+                 (cntj-before-tx 5)
+                 (cnt-stuff 6)
+                 (sync-pattern 8'b00101010)
+                 (s-jwait 0)
+                 (s-idle 1)
+                 (s-sync 2)
+                 (s-data 3)
+                 (s-done 4)
+                 (s-txwait 5)
+                 (s-txoe 6)
+                 (s-txsync 7)
+                 (s-txdata 8)
+                 (s-txeop1 9)
+                 (s-txeop2 10)
+                 (s-txdone 11))
+   :signals ((dpl :reg 5 :init 0)
+             (dnl :reg 5 :init 0)
+             (dpv :reg)
+             (dnv :reg)
+             (njl :reg)
+             (det-fast :reg)
+             (det-slow :reg)
+             (lastdp :reg 1 :init 0)
+             (cnt-clk :reg 3 :init 1)
+             (cnt-bit :reg 6 :init 0)
+             (state :reg 4 :init 0))
+   :body
+   ((always-comb
+     (begin
+       (setf dpv (logor (logand (bit dpl 3) (bit dpl 2))
+                     (logand (bit dpl 2) (bit dpl 1))
+                     (logand (bit dpl 3) (bit dpl 1))))
+       (setf dnv (logor (logand (bit dnl 3) (bit dnl 2))
+                     (logand (bit dnl 2) (bit dnl 1))
+                     (logand (bit dnl 3) (bit dnl 1))))
+       (setf njl (logor (not (bit dpl 0)) (bit dnl 0)))
+       (setf det-fast (logor
+                    (logand (/= (bit dpl 4) (bit dpl 3))
+                            (= (bit dpl 3) (bit dpl 2))
+                            (= (bit dpl 2) (bit dpl 1))
+                            (= (bit dpl 1) (bit dpl 0)))
+                    (logand (/= (bit dpl 3) (bit dpl 2))
+                            (= (bit dpl 2) (bit dpl 1))
+                            (= (bit dpl 1) (bit dpl 0)))))
+       (setf det-slow (logor
+                    (logand (= (bit dpl 4) (bit dpl 3))
+                            (= (bit dpl 3) (bit dpl 2))
+                            (= (bit dpl 2) (bit dpl 1))
+                            (/= (bit dpl 1) (bit dpl 0)))
+                    (logand (= (bit dpl 4) (bit dpl 3))
+                            (= (bit dpl 3) (bit dpl 2))
+                            (/= (bit dpl 2) (bit dpl 1)))))))
+
+    (always
+     (posedge clk)
+     (if (not rstn)
+       (begin
+         (setf dpl 0)
+         (setf dnl 0))
+       (begin
+         (setf dpl (logior (logand dpl #x0F) (lsh usb-dp-rx 4)))
+         (setf dnl (logior (logand dnl #x0F) (lsh usb-dn-rx 4))))))
+
+    (always
+     (posedge clk)
+     (if (not rstn)
+       (setf lastdp 0)
+       (if (= cnt-clk 0)
+         (setf lastdp dpv))))
+
+    (always
+     (posedge clk)
+     (if (not rstn)
+       (begin
+         (setf usb-dp-tx 1)
+         (setf usb-dn-tx 0)
+         (setf rx-sta 0)
+         (setf rx-ena 0)
+         (setf rx-bit 0)
+         (setf rx-fin 0)
+         (setf tx-req 0)
+         (setf cnt-clk 1)
+         (setf cnt-bit 0)
+         (setf state 0))
+       (begin
+         (setf rx-sta 0)
+         (setf rx-ena 0)
+         (setf rx-bit 0)
+         (setf rx-fin 0)
+         (setf tx-req 0)
+         (setf cnt-clk (if (= cnt-clk 0) 1 (- cnt-clk 1)))
+         (if (= state s-jwait)
+           (if njl
+             (setf cnt-bit 0)
+             (if (< cnt-bit cntj-before-rx)
+               (incf cnt-bit)
+               (begin
+                 (setf cnt-bit 0)
+                 (setf state s-idle)))))
+         (if (= state s-idle)
+           (if njl
+             (begin
+               (setf cnt-clk 0)
+               (setf state s-sync))))
+          (if (logand (= state s-sync) (= cnt-clk 0))
+            (if (logor (/= dpv (bit sync-pattern cnt-bit))
+                       (= dnv (bit sync-pattern cnt-bit)))
+             (begin
+               (setf cnt-bit 0)
+               (setf state s-jwait))
+             (if (>= cnt-bit 7)
+               (begin
+                 (setf cnt-bit 1)
+                 (setf state s-data))
+               (incf cnt-bit))))
+         (if (logand (= state s-data) (= cnt-clk 0))
+           (begin
+             (setf cnt-bit 0)
+             (if (logand dpv dnv)
+               (setf state s-jwait)
+               (if (logand (not dpv) (not dnv))
+                 (begin
+                   (setf rx-fin 1)
+                   (setf state s-done))
+                 (if (>= cnt-bit cnt-stuff)
+                   (if (= dpv lastdp) (setf state s-jwait))
+                   (if (= dpv lastdp)
+                     (begin
+                       (incf cnt-bit)
+                       (setf rx-ena 1)
+                       (setf rx-bit 1))
+                     (begin
+                       (setf rx-ena 1)
+                       (setf rx-bit 0))))))
+             (if det-fast
+               (setf cnt-clk 2)
+               (if det-slow
+                 (setf cnt-clk 0)))))
+         (if (= state s-done)
+           (if tx-sta
+             (setf state s-txwait)
+             (if (= cnt-clk 0)
+               (setf state s-jwait))))
+         (if (= state s-txwait)
+           (if njl
+             (setf cnt-bit 0)
+             (if (< cnt-bit cntj-before-tx)
+               (incf cnt-bit)
+               (begin
+                 (setf cnt-bit 0)
+                 (setf state s-txoe)))))
+         (if (logand (= state s-txoe) (= cnt-clk 0))
+           (begin
+             (setf usb-oe 1)
+             (setf usb-dp-tx 1)
+             (setf usb-dn-tx 0)
+             (setf state s-txsync)))
+         (if (logand (= state s-txsync) (= cnt-clk 0))
+           (begin
+             (setf usb-oe 1)
+             (setf usb-dp-tx (bit sync-pattern cnt-bit))
+             (setf usb-dn-tx (not (bit sync-pattern cnt-bit)))
+             (if (>= cnt-bit 7)
+               (begin
+                 (setf cnt-bit 1)
+                 (setf state s-txdata))
+               (incf cnt-bit))))
+         (if (logand (= state s-txdata) (= cnt-clk 1))
+           (setf tx-req (not (>= cnt-bit cnt-stuff))))
+         (if (logand (= state s-txdata) (= cnt-clk 0))
+           (if (>= cnt-bit cnt-stuff)
+             (begin
+               (setf cnt-bit 0)
+               (setf usb-oe 1)
+               (setf usb-dp-tx (not usb-dp-tx))
+               (setf usb-dn-tx usb-dp-tx))
+             (if tx-fin
+               (begin
+                 (setf cnt-bit 0)
+                 (setf usb-oe 1)
+                 (setf usb-dp-tx 0)
+                 (setf usb-dn-tx 0)
+                 (setf state s-txeop1))
+               (if (not tx-bit)
+                 (begin
+                   (setf cnt-bit 0)
+                   (setf usb-oe 1)
+                   (setf usb-dp-tx (not usb-dp-tx))
+                   (setf usb-dn-tx usb-dp-tx))
+                 (incf cnt-bit)))))
+         (if (logand (= state s-txeop1) (= cnt-clk 0))
+           (begin
+             (setf usb-oe 1)
+             (setf usb-dp-tx 0)
+             (setf usb-dn-tx 0)
+             (setf state s-txeop2)))
+         (if (logand (= state s-txeop2) (= cnt-clk 0))
+           (begin
+             (setf usb-oe 1)
+             (setf usb-dp-tx 1)
+             (setf usb-dn-tx 0)
+             (setf state s-txdone)))
+         (if (logand (= state s-txdone) (= cnt-clk 0))
+           (begin
+             (setf usb-oe 0)
+             (setf usb-dp-tx 1)
+             (setf usb-dn-tx 0)
+             (setf cnt-bit 5)
+             (setf state s-jwait)))))))))

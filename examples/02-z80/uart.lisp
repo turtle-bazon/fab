@@ -15,48 +15,48 @@
       (begin
         (if rst
           (begin
-            (= state 0)
-            (= bit-index 0)
-            (= shift-reg 0)
-            (= baud-timer 0)
-            (= tx-reg 1)
-            (= busy-reg 0)
+            (setf state 0)
+            (setf bit-index 0)
+            (setf shift-reg 0)
+            (setf baud-timer 0)
+            (setf tx-reg 1)
+            (setf busy-reg 0)
           )
           (begin
             (case state
               (0
                (begin
-                 (= tx-reg 1)
-                 (= busy-reg 0)
+                 (setf tx-reg 1)
+                 (setf busy-reg 0)
                  (if write-enable
                    (begin
-                     (= shift-reg (concat 1 (slice data-in 7 0) 0))
-                     (= bit-index 0)
-                     (= baud-timer 0)
-                     (= state 1)
-                     (= busy-reg 1)
+                     (setf shift-reg (concat 1 (slice data-in 7 0) 0))
+                     (setf bit-index 0)
+                     (setf baud-timer 0)
+                     (setf state 1)
+                     (setf busy-reg 1)
                    )
                  )
                )
               )
               (1
                (begin
-                 (= tx-reg (bit shift-reg 0))
+                 (setf tx-reg (bit shift-reg 0))
                  (if (= baud-timer baud-timer-max)
                    (begin
-                     (= baud-timer 0)
+                     (setf baud-timer 0)
                      (if (= bit-index 10)
                        (begin
-                         (= state 0)
-                         (= busy-reg 0)
+                         (setf state 0)
+                         (setf busy-reg 0)
                        )
                        (begin
-                         (= shift-reg (concat 0 (slice shift-reg 10 1)))
-                         (= bit-index (+ bit-index 1))
+                         (setf shift-reg (concat 0 (slice shift-reg 10 1)))
+                         (setf bit-index (+ bit-index 1))
                        )
                      )
                    )
-                   (= baud-timer (+ baud-timer 1))
+                   (setf baud-timer (+ baud-timer 1))
                  )
                )
               )

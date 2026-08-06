@@ -1,0 +1,121 @@
+(in-package :fab)
+
+(fab
+ (module usb-keyboard-top
+  :ports ((rstn :input)
+          (clk :input)
+          (usb-dp-pull :output)
+          (usb-dp :inout)
+          (usb-dn :inout)
+          (usb-rstn :output)
+          (key-value :input 16)
+          (key-request :input)
+          (debug-en :output)
+          (debug-data :output 8)
+          (debug-uart-tx :output))
+
+  :params ((debug "FALSE"))
+
+  :signals ((in-data :reg 24)
+            (in-valid :reg 1)
+            (in-cnt :reg 5)
+            (in-ready :wire)
+            (ep00-setup-cmd :wire 64)
+            (ep00-resp-idx :wire 9)
+            (ep00-resp :reg 8)
+            (descriptor-hid :wire 504))
+
+  :localparams ((descriptor-str0 #x04030904))
+
+  :assigns ((descriptor-hid #x05010906A101050719E029E71500250175019508810295017508810395057501050819012905910295017503910395067508150025FF0507190029658100C0))
+
+  :body
+  ((always
+      (posedge clk)
+    (if (not usb-rstn)
+      (begin
+        (setf-nb in-data 0)
+        (setf-nb in-valid 0)
+        (setf-nb in-cnt 0))
+      (begin
+        (if (= in-cnt 0)
+          (begin
+            (setf-nb in-data (concat (slice key-value 7 0) 0 (slice key-value 15 8)))
+            (if key-request
+              (begin
+                (setf-nb in-valid 1)
+                (setf-nb in-cnt 1))))
+          (if (< in-cnt 17)
+            (if in-ready
+              (begin
+                (setf-nb in-data (concat 0 (slice in-data 23 8)))
+                (setf-nb in-cnt (+ in-cnt 1))))
+            (begin
+              (setf-nb in-valid 0)
+              (setf-nb in-cnt 0)))))))
+
+   (always-comb
+    (begin
+      (if (= (slice ep00-setup-cmd 15 0) #x0681)
+        (setf ep00-resp (slice descriptor-hid
+                                (* (- 63 ep00-resp-idx) 8)
+                                (+ (* (- 63 ep00-resp-idx) 8) 7)))
+        (setf ep00-resp 0))))
+
+   (instance usbfs-core-top (u-usbfs-core)
+     ((descriptor-device #x12011001000000209AFB9AFB000101020001)
+      (descriptor-str1 #x2C036700690074006800750062002e0063006f006d002f00570061006e0067005800750061006e0039003500)
+      (descriptor-str2 #x240346005000470041002D005500530042002D004B006500790062006F00610072006400)
+      (descriptor-str3 0)
+      (descriptor-str4 0)
+      (descriptor-str5 0)
+      (descriptor-str6 0)
+      (descriptor-config #x090222000101008064090400000103010100092111010001223F0007058103080064)
+      (ep00-maxpktsize #x20)
+      (ep81-maxpktsize 8)
+      (ep82-maxpktsize #x20)
+      (ep83-maxpktsize #x20)
+      (ep84-maxpktsize #x20)
+      (ep81-isochronous 0)
+      (ep82-isochronous 0)
+      (ep83-isochronous 0)
+      (ep84-isochronous 0)
+      (ep01-isochronous 0)
+      (ep02-isochronous 0)
+      (ep03-isochronous 0)
+      (ep04-isochronous 0)
+      (debug debug))
+     ((rstn rstn)
+      (clk clk)
+      (usb-dp-pull usb-dp-pull)
+      (usb-dp usb-dp)
+      (usb-dn usb-dn)
+      (usb-rstn usb-rstn)
+      (sot )
+      (sof )
+      (ep00-setup-cmd ep00-setup-cmd)
+      (ep00-resp-idx ep00-resp-idx)
+      (ep00-resp ep00-resp)
+      (ep81-data (slice in-data 7 0))
+      (ep81-valid in-valid)
+      (ep81-ready in-ready)
+      (ep82-data 0)
+      (ep82-valid 0)
+      (ep82-ready )
+      (ep83-data 0)
+      (ep83-valid 0)
+      (ep83-ready )
+      (ep84-data 0)
+      (ep84-valid 0)
+      (ep84-ready )
+      (ep01-data )
+      (ep01-valid )
+      (ep02-data )
+      (ep02-valid )
+      (ep03-data )
+      (ep03-valid )
+      (ep04-data )
+      (ep04-valid )
+      (debug-en debug-en)
+      (debug-data debug-data)
+      (debug-uart-tx debug-uart-tx))))))

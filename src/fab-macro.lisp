@@ -41,14 +41,21 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
          ((string= op ">") (ir-binop '> (parse-expr (second form)) (parse-expr (third form))))
          ((string= op "<=") (ir-binop '<= (parse-expr (second form)) (parse-expr (third form))))
          ((string= op ">=") (ir-binop '>= (parse-expr (second form)) (parse-expr (third form))))
-          ((string= op "AND") (ir-binop '&& (parse-expr (second form)) (parse-expr (third form))))
-          ((string= op "OR") (ir-binop '|| (parse-expr (second form)) (parse-expr (third form))))
-          ((string= op "LOGAND") (ir-binop '& (parse-expr (second form)) (parse-expr (third form))))
+           ((string= op "AND")
+            (let ((args (mapcar #'parse-expr (cdr form))))
+              (reduce #'(lambda (a b) (ir-binop '&& a b)) args)))
+           ((string= op "OR")
+            (let ((args (mapcar #'parse-expr (cdr form))))
+              (reduce #'(lambda (a b) (ir-binop '|| a b)) args)))
+           ((string= op "LOGAND") (ir-binop '& (parse-expr (second form)) (parse-expr (third form))))
            ((string= op "LOGOR") (ir-binop '\| (parse-expr (second form)) (parse-expr (third form))))
+           ((string= op "LOGIOR") (ir-binop '\| (parse-expr (second form)) (parse-expr (third form))))
            ((string= op "LOGXOR") (ir-binop '^ (parse-expr (second form)) (parse-expr (third form))))
+           ((string= op "LSH") (ir-binop '<< (parse-expr (second form)) (parse-expr (third form))))
+           ((string= op "RSH") (ir-binop '>> (parse-expr (second form)) (parse-expr (third form))))
           ((string= op "NOT") (ir-unop '! (parse-expr (second form))))
           ((string= op "LOGNOT") (ir-unop '~ (parse-expr (second form))))
-          ((string= op "SLICE") (ir-partselect (parse-expr (second form))
+           ((string= op "SLICE") (ir-partselect (parse-expr (second form))
                                                (parse-expr (third form))
                                                (parse-expr (fourth form))))
           ((string= op "CONCAT")
@@ -58,6 +65,9 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
            (ir-if-expr (parse-expr (second form))
                        (parse-expr (third form))
                        (parse-expr (fourth form))))
+          ((string= op "HIGH-Z") (ir-high-z (when (second form) (parse-expr (second form)))))
+          ((string= op "ZERO-EXTEND") (ir-zero-extend (parse-expr (second form)) (parse-expr (third form))))
+          ((string= op "SIGN-EXTEND") (ir-sign-extend (parse-expr (second form)) (parse-expr (third form))))
           ((string= op "FUNCALL") (ir-funcall (second form) (mapcar #'parse-expr (cddr form))))
           ((char= (char op 0) #\$) (ir-system-call (intern (subseq op 1)) (mapcar #'parse-expr (cdr form))))
           ;; Implicit function call: if first element matches a known function name
@@ -72,6 +82,7 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
   "Parse a DSL statement form into an IR statement node.
    TASK-NAMES is a list of known task names for implicit call detection."
   (cond
+    ((null form) nil)  ; nil = no-op, skip
     ((listp form)
      (let ((op (sym-name (car form))))
        (cond
@@ -144,8 +155,13 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 (defun parse-sensitivity (form)
   "Parse a DSL sensitivity list form."
   (cond
-    ((and (listp form) (= (length form) 2))
+    ((and (listp form) (= (length form) 2) (symbolp (first form)) (symbolp (second form)))
+     ;; Single trigger: (posedge clk)
      (list (list (first form) (second form))))
+    ((and (listp form) (= (length form) 3) (listp (third form)))
+     ;; Two triggers: (posedge clk (negedge rstn))
+     (list (list (first form) (second form))
+           (list (first (third form)) (second (third form)))))
     ((and (symbolp form) (string= (sym-name form) "*"))
      :*)
     (t (error "Invalid sensitivity list: ~a" form))))
@@ -162,16 +178,51 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 ;;; Item parsers
 
 (defun parse-port (form)
-  "Parse a DSL port form: (name direction width)."
-  (ir-port (first form) (second form) (third form)))
+  "Parse a DSL port form: (name direction [width] [:reg]).
+   Width is optional; if the third element is :reg, width defaults to nil."
+  (let ((name (first form))
+        (direction (second form))
+        (width nil)
+        (kind nil))
+    (cond
+      ((= (length form) 2) nil)  ; (name direction) - width=nil, kind=nil
+      ((= (length form) 3)
+       (if (keywordp (third form))
+           (setf kind (third form))  ; (name direction :reg)
+           (setf width (third form))))  ; (name direction width)
+      ((>= (length form) 4)
+       (if (keywordp (third form))
+           (progn (setf kind (third form)
+                        width (fourth form)))  ; (name direction :reg width)
+           (progn (setf width (third form)
+                        kind (fourth form))))))  ; (name direction width :reg)
+    (ir-port name direction width kind)))
 
 (defun parse-param (form)
-  "Parse a DSL param form: (name value)."
-  (ir-param (first form) (parse-expr (second form))))
+  "Parse a DSL param form: (name value) or (name value :width w)."
+  (let ((name (first form))
+        (value (parse-expr (second form)))
+        (width nil))
+    (loop for rest on (cddr form) by #'cddr
+          when (and (keywordp (car rest))
+                    (string= (symbol-name (car rest)) "WIDTH"))
+          do (setf width (parse-expr (second rest))))
+    (if width
+        (ir-param-with-width name width value)
+        (ir-param name value))))
 
 (defun parse-localparam (form)
-  "Parse a DSL localparam form: (name value)."
-  (ir-localparam (first form) (parse-expr (second form))))
+  "Parse a DSL localparam form: (name value) or (name value :width w)."
+  (let ((name (first form))
+        (value (parse-expr (second form)))
+        (width nil))
+    (loop for rest on (cddr form) by #'cddr
+          when (and (keywordp (car rest))
+                    (string= (symbol-name (car rest)) "WIDTH"))
+          do (setf width (parse-expr (second rest))))
+    (if width
+        (ir-localparam-with-width name width value)
+        (ir-localparam name value))))
 
 (defun parse-signal (form)
   "Parse a DSL signal form: (name kind width) or (name kind width :attrs ... :init val).
@@ -201,6 +252,50 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
   "Parse a DSL continuous assign form: (lhs rhs)."
   (ir-cont-assign (first form) (parse-expr (second form))))
 
+;;; Defparam parser
+
+(defun parse-defparam (form)
+  "Parse a DSL defparam form: (defparam inst-name.param-name value) or (defparam inst-name param-name value)."
+  (let ((first-arg (second form))
+        (second-arg (third form))
+        (value (fourth form)))
+    (if value
+        ;; (defparam inst-name param-name value)
+        (ir-defparam first-arg (if (symbolp second-arg) (symbol-name second-arg) second-arg) (parse-expr value))
+        ;; (defparam inst-name.param-name value) - dot notation
+        (let* ((name-str (if (symbolp first-arg) (symbol-name first-arg) first-arg))
+               (dot-pos (position #\. name-str)))
+          (if dot-pos
+              (ir-defparam (subseq name-str 0 dot-pos)
+                           (subseq name-str (1+ dot-pos))
+                           (parse-expr second-arg))
+              (error "defparam requires dot notation (inst.param) or 3 args: ~a" form))))))
+
+;;; Generate-if parser
+
+(defun parse-generate-if (form &optional task-names)
+  "Parse a DSL generate-if form: (generate-if condition then-items else-items)."
+  (let ((condition (parse-expr (second form)))
+        (then-items (mapcar #'(lambda (item) (parse-body-item item task-names)) (third form)))
+        (else-items (when (fourth form)
+                      (mapcar #'(lambda (item) (parse-body-item item task-names)) (fourth form)))))
+    (ir-generate-if condition then-items else-items)))
+
+;;; Body item parser (used by module and generate-if)
+
+(defun parse-body-item (item &optional task-names)
+  "Parse a single body item (always, always-comb, instance, defparam, generate-if, etc.)."
+  (let ((tag (sym-name (car item))))
+    (cond
+      ((string= tag "ALWAYS") (parse-always item task-names))
+      ((string= tag "ALWAYS-COMB")
+       (ir-always-comb
+        (ir-begin (mapcar #'(lambda (s) (parse-stmt s task-names)) (cdr item)))))
+      ((string= tag "INSTANCE") (parse-instance item))
+      ((string= tag "DEFPARAM") (parse-defparam item))
+      ((string= tag "GENERATE-IF") (parse-generate-if item task-names))
+      (t (error "Unknown body item: ~a" item)))))
+
 ;;; Task parser
 
 (defun parse-task (form &optional task-names)
@@ -209,7 +304,7 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
         (params (second form))
         (body (cddr form)))
     (ir-task name
-             (mapcar (lambda (p) (ir-port (first p) (second p) (third p))) params)
+             (mapcar (lambda (p) (ir-port (first p) (second p) (third p) nil)) params)
              (mapcar #'(lambda (s) (parse-stmt s task-names)) body))))
 
 ;;; Function parser
@@ -228,7 +323,7 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
           when (and (keywordp key) (string= (symbol-name key) "BODY"))
           do (setf body (mapcar #'parse-stmt val)))
     (ir-function name
-                 (mapcar (lambda (p) (ir-port (first p) (second p) (third p))) params)
+                 (mapcar (lambda (p) (ir-port (first p) (second p) (third p) nil)) params)
                  (cons ret-kind ret-width)
                  body)))
 
@@ -303,15 +398,7 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
                       ((string= key-name "BODY")
                        (let ((task-names (mapcar #'ir-task-name tasks))
                              (*current-functions* (mapcar #'ir-function-name functions)))
-                         (setf body (mapcar #'(lambda (item)
-                                               (let ((tag (sym-name (car item))))
-                                               (cond
-                                                     ((string= tag "ALWAYS") (parse-always item task-names))
-                                                     ((string= tag "ALWAYS-COMB")
-                                                      (ir-always-comb
-                                                       (ir-begin (mapcar #'(lambda (s) (parse-stmt s task-names)) (cdr item)))))
-                                                     ((string= tag "INSTANCE") (parse-instance item))
-                                                     (t (error "Unknown body item: ~a" item)))))
+                         (setf body (mapcar #'(lambda (item) (parse-body-item item task-names))
                                            val))))
                       (t (error "Unknown module option: ~a" key)))))
       (ir-module name board (append ports params localparams signals assigns body) tasks functions))))

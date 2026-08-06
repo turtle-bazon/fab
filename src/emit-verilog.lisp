@@ -34,7 +34,11 @@
                   (format stream "~a" (verilog-ident name)))))
     (ir-binop (format stream "(~a ~a ~a)"
                       (emit-expr-to-string (ir-binop-left expr))
-                      (ir-binop-op expr)
+                      (let ((op (ir-binop-op expr)))
+                        (if (symbolp op)
+                            (let ((name (symbol-name op)))
+                              (if (string= name "") "||" name))
+                            (format nil "~a" op)))
                       (emit-expr-to-string (ir-binop-right expr))))
     (ir-unop (format stream "(~a~a)"
                      (ir-unop-op expr)
@@ -62,6 +66,20 @@
                         (emit-expr-to-string (ir-if-expr-cond expr))
                         (emit-expr-to-string (ir-if-expr-then expr))
                         (emit-expr-to-string (ir-if-expr-else expr))))
+    (ir-high-z (let ((w (ir-high-z-width expr)))
+                 (cond
+                   ((null w) (format stream "1'bz"))
+                   ((ir-num-p w) (let ((val (ir-num-value w)))
+                                   (if (> val 1)
+                                       (format stream "~a'bz" val)
+                                       (format stream "1'bz"))))
+                   (t (format stream "~a'bz" (emit-expr-to-string w))))))
+    (ir-zero-extend (let ((val (emit-expr-to-string (ir-zero-extend-value expr)))
+                          (tw (emit-expr-to-string (ir-zero-extend-target-width expr))))
+                      (format stream "{~a'h0, ~a}" tw val)))
+    (ir-sign-extend (let ((val (emit-expr-to-string (ir-sign-extend-value expr)))
+                          (tw (emit-expr-to-string (ir-sign-extend-target-width expr))))
+                      (format stream "{{~a{~a[~a-1]}}, ~a}" tw val tw val)))
     (ir-system-call
      (let ((args (ir-system-call-args expr)))
        (if args
@@ -82,9 +100,13 @@
 (defun emit-port (stream port)
   (let ((dir (ecase (ir-port-direction port)
                (:input "input")
-               (:output "output")))
-        (range (width-range (ir-port-width port))))
-    (emit stream "~a ~a~a;" dir (or range "") (verilog-ident (ir-port-name port)))))
+               (:output "output")
+               (:inout "inout")))
+        (range (width-range (ir-port-width port)))
+        (kind (ir-port-kind port)))
+    (if (and kind (eq kind :reg))
+        (emit stream "~a reg ~a~a;" dir (or range "") (verilog-ident (ir-port-name port)))
+        (emit stream "~a ~a~a;" dir (or range "") (verilog-ident (ir-port-name port))))))
 
 (defun emit-signal (stream sig)
   (let ((kind (ecase (ir-signal-kind sig)
@@ -114,16 +136,25 @@
       (emit stream "end"))))
 
 (defun emit-param (stream p)
-  (emit stream "parameter ~a = ~a;" (verilog-ident (ir-param-name p)) (emit-expr-to-string (ir-param-value p))))
+  (let ((w (ir-param-width p)))
+    (if w
+        (let ((wval (if (ir-num-p w) (ir-num-value w) w)))
+          (emit stream "parameter ~a~a = ~a;" (width-range wval) (verilog-ident (ir-param-name p)) (emit-expr-to-string (ir-param-value p))))
+        (emit stream "parameter ~a = ~a;" (verilog-ident (ir-param-name p)) (emit-expr-to-string (ir-param-value p))))))
 
 (defun emit-localparam (stream p)
-  (emit stream "localparam ~a = ~a;" (verilog-ident (ir-localparam-name p)) (emit-expr-to-string (ir-localparam-value p))))
+  (let ((w (ir-localparam-width p)))
+    (if w
+        (let ((wval (if (ir-num-p w) (ir-num-value w) w)))
+          (emit stream "localparam ~a~a = ~a;" (width-range wval) (verilog-ident (ir-localparam-name p)) (emit-expr-to-string (ir-localparam-value p))))
+        (emit stream "localparam ~a = ~a;" (verilog-ident (ir-localparam-name p)) (emit-expr-to-string (ir-localparam-value p))))))
 
 (defun emit-cont-assign (stream a)
   (emit stream "assign ~a = ~a;" (verilog-ident (ir-cont-assign-lhs a)) (emit-expr-to-string (ir-cont-assign-rhs a))))
 
 (defun emit-stmt (stream stmt)
   "Emit a statement (inside an always block)."
+  (unless stmt (return-from emit-stmt nil))  ; skip nil statements
   (etypecase stmt
     (ir-non-blocking
      (emit stream "~a <= ~a;" (emit-expr-to-string (ir-non-blocking-lhs stmt)) (emit-expr-to-string (ir-non-blocking-rhs stmt))))
@@ -237,7 +268,7 @@
         (format s "*")
         (loop for (edge signal) in sensitivity
               for first = t then nil
-              do (unless first (format s " "))
+              do (unless first (format s " or "))
                  (format s "~a ~a" (string-downcase (symbol-name edge))
                          (verilog-ident signal))))))
 
@@ -252,6 +283,8 @@
         (always-blocks '())
         (always-comb-blocks '())
         (instances '())
+        (defparams '())
+        (generate-ifs '())
         (tasks (ir-module-tasks mod))
         (functions (ir-module-functions mod)))
     ;; Classify items
@@ -264,7 +297,9 @@
         (ir-cont-assign (push item assigns))
         (ir-always (push item always-blocks))
         (ir-always-comb (push item always-comb-blocks))
-        (ir-instance (push item instances))))
+        (ir-instance (push item instances))
+        (ir-defparam (push item defparams))
+        (ir-generate-if (push item generate-ifs))))
     (setf ports (nreverse ports)
           params (nreverse params)
           localparams (nreverse localparams)
@@ -272,16 +307,23 @@
           assigns (nreverse assigns)
           always-blocks (nreverse always-blocks)
           always-comb-blocks (nreverse always-comb-blocks)
-          instances (nreverse instances))
+          instances (nreverse instances)
+          defparams (nreverse defparams)
+          generate-ifs (nreverse generate-ifs))
     ;; Module header
     (emit stream "module ~a (" (verilog-ident name))
     (loop for (p . rest) on ports
           do (let ((dir (ecase (ir-port-direction p)
                           (:input "input")
-                          (:output "output")))
-                   (range (width-range (ir-port-width p))))
-               (emit stream "  ~a ~a~a~a" dir (or range "") (verilog-ident (ir-port-name p))
-                     (if rest "," ""))))
+                          (:output "output")
+                          (:inout "inout")))
+                   (range (width-range (ir-port-width p)))
+                   (kind (ir-port-kind p)))
+               (if (and kind (eq kind :reg))
+                   (emit stream "  ~a reg ~a~a~a" dir (or range "") (verilog-ident (ir-port-name p))
+                         (if rest "," ""))
+                   (emit stream "  ~a ~a~a~a" dir (or range "") (verilog-ident (ir-port-name p))
+                         (if rest "," "")))))
     (emit stream ");")
     ;; Parameters
     (when params
@@ -330,8 +372,48 @@
       (terpri stream)
       (dolist (inst instances)
         (emit-instance stream inst)))
+    ;; Defparams
+    (when defparams
+      (terpri stream)
+      (dolist (dp defparams)
+        (emit-defparam stream dp)))
+    ;; Generate-if blocks
+    (when generate-ifs
+      (terpri stream)
+      (dolist (gi generate-ifs)
+        (emit-generate-if stream gi)))
     ;; End module
     (emit stream "endmodule")))
+
+(defun emit-defparam (stream dp)
+  "Emit a defparam statement."
+  (emit stream "defparam ~a.~a = ~a;"
+        (verilog-ident (ir-defparam-inst-name dp))
+        (verilog-ident (ir-defparam-param-name dp))
+        (emit-expr-to-string (ir-defparam-value dp))))
+
+(defun emit-generate-if (stream gi)
+  "Emit a generate if block."
+  (emit stream "generate")
+  (emit stream "if (~a) begin" (emit-expr-to-string (ir-generate-if-cond gi)))
+  (indent
+    (dolist (item (ir-generate-if-then gi))
+      (etypecase item
+        (ir-instance (emit-instance stream item))
+        (ir-cont-assign (emit-cont-assign stream item))
+        (ir-always (emit-always stream item))
+        (ir-always-comb (emit-always-comb stream item)))))
+  (when (ir-generate-if-else gi)
+    (emit stream "end else begin")
+    (indent
+      (dolist (item (ir-generate-if-else gi))
+        (etypecase item
+          (ir-instance (emit-instance stream item))
+          (ir-cont-assign (emit-cont-assign stream item))
+          (ir-always (emit-always stream item))
+          (ir-always-comb (emit-always-comb stream item))))))
+  (emit stream "end")
+  (emit stream "endgenerate"))
 
 (defun emit-instance (stream inst)
   "Emit a module instantiation."
@@ -352,6 +434,7 @@
           do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
                      (if rest "," "")))
     (format stream ");~%")))
+
 
 (defun emit-testbench (stream tb)
   "Emit a complete testbench to STREAM."
@@ -387,19 +470,18 @@
   (let ((clock-pin (ir-board-clock board))
         (pins (ir-board-pins board))
         (ports (remove-if-not #'ir-port-p (ir-module-items mod))))
-    ;; Map port names to pin numbers
     (let ((pin-map (make-hash-table :test 'equal)))
       (dolist (p pins)
         (setf (gethash (string-downcase (symbol-name (car p))) pin-map) (cadr p)))
-      ;; Emit clock constraint
       (when clock-pin
-        (let ((clk-port (find-if (lambda (p) (string= (symbol-name (ir-port-name p)) "CLK"))
+        (let ((clk-port (find-if (lambda (p) (search "CLK" (symbol-name (ir-port-name p)) :test #'string=))
                                  ports)))
           (when clk-port
-            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident (ir-port-name clk-port)) clock-pin))))
-      ;; Emit other pin constraints
+            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident (ir-port-name clk-port)) clock-pin)
+            (format stream "IO_PORT \"~a\" IO_TYPE=LVCMOS33;~%" (verilog-ident (ir-port-name clk-port))))))
       (dolist (port ports)
         (let* ((name (ir-port-name port))
                (pin-num (gethash (string-downcase (symbol-name name)) pin-map)))
           (when pin-num
-            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident name) pin-num)))))))
+            (format stream "IO_LOC  \"~a\" ~a;~%" (verilog-ident name) pin-num)
+            (format stream "IO_PORT \"~a\" IO_TYPE=LVCMOS33;~%" (verilog-ident name))))))))

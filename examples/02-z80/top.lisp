@@ -26,60 +26,60 @@
       (posedge clk)
       (begin
         (if rst
-          (begin
-            (= led-state 0)
-            (= led-timer 0)
-            (= alu-a 0)
-            (= alu-b 0)
-            (= alu-op-wire 0)
-            (= alu-flags-in-wire 0)
-            (= alu-carry-in-wire 0)
-            (= uart-data-wire 0)
-            (= uart-write-wire 0)
-            (= ctrl-state 0)
-            (= test-char #x41)
-          )
-          (begin
-            (= uart-write-wire 0)
-            (= led-timer (+ led-timer 1))
-            (if (= led-timer 13500000)
-              (begin
-                (= led-timer 0)
-                (= led-state (lognot led-state))
-              )
-            )
-            (case ctrl-state
-              (0
+           (begin
+             (setf led-state 0)
+             (setf led-timer 0)
+             (setf alu-a 0)
+             (setf alu-b 0)
+             (setf alu-op-wire 0)
+             (setf alu-flags-in-wire 0)
+             (setf alu-carry-in-wire 0)
+             (setf uart-data-wire 0)
+             (setf uart-write-wire 0)
+             (setf ctrl-state 0)
+             (setf test-char #x41)
+           )
+           (begin
+             (setf uart-write-wire 0)
+             (setf led-timer (+ led-timer 1))
+             (if (= led-timer 13500000)
                (begin
-                 (= alu-a test-char)
-                 (= alu-b 0)
-                 (= alu-op-wire 6)
-                 (= ctrl-state 1)
+                 (setf led-timer 0)
+                 (setf led-state (lognot led-state))
                )
-              )
-              (1
-               (begin
-                 (if (= uart-busy-alu 0)
-                   (begin
-                     (= uart-data-wire alu-result-wire)
-                     (= uart-write-wire 1)
-                     (= test-char (+ test-char 1))
-                     (if (= test-char #x5A)
-                       (= ctrl-state 2)
-                       (= ctrl-state 0)
-                     )
-                   )
-                 )
+             )
+             (case ctrl-state
+               (0
+                (begin
+                  (setf alu-a test-char)
+                  (setf alu-b 0)
+                  (setf alu-op-wire 6)
+                  (setf ctrl-state 1)
+                )
                )
-              )
-              (2
-               (begin
-                 (= test-char #x41)
-                 (= ctrl-state 0)
+               (1
+                (begin
+                  (if (= uart-busy-alu 0)
+                    (begin
+                      (setf uart-data-wire alu-result-wire)
+                      (setf uart-write-wire 1)
+                      (setf test-char (+ test-char 1))
+                      (if (= test-char #x5A)
+                        (setf ctrl-state 2)
+                        (setf ctrl-state 0)
+                      )
+                    )
+                  )
+                )
                )
-              )
-            )
-          )
+               (2
+                (begin
+                  (setf test-char #x41)
+                  (setf ctrl-state 0)
+                )
+               )
+             )
+           )
         )
       )
     )

@@ -6,11 +6,11 @@
 Tang Nano 9K                    USB Type-A Male Plug
 ┌─────────────┐                 ┌───────────────────┐
 │             │                 │                   │
-│  pin 17 ───┼─── 1.5kΩ ──────┼─── D+ (pin 3)     │
+│  pin 27 ───┼─── 1.5kΩ ──────┼─── D+ (pin 3)     │
 │             │                 │                   │
-│  pin 19 ───┼─── 22Ω ────────┼─── D+ (pin 3)     │
+│  pin 25 ───┼─── 22Ω ────────┼─── D+ (pin 3)     │
 │             │                 │                   │
-│  pin 18 ───┼─── 22Ω ────────┼─── D- (pin 2)     │
+│  pin 26 ───┼─── 22Ω ────────┼─── D- (pin 2)     │
 │             │                 │                   │
 │  GND ───────┼────────────────┼─── GND (pin 4)    │
 │             │                 │                   │
@@ -21,14 +21,14 @@ Tang Nano 9K                    USB Type-A Male Plug
 
 ## Pin Assignments
 
-| FPGA Pin | Signal     | Direction | Notes                        |
-|----------|------------|-----------|------------------------------|
-| 17       | usb_dp_pull| Output    | D+ pull-up control           |
-| 18       | usb_dn     | Bidir     | USB D- data line             |
-| 19       | usb_dp     | Bidir     | USB D+ data line             |
-| 52       | clk_27mhz  | Input     | 27MHz on-board oscillator    |
-| 3        | btn        | Input     | User button (active-low)     |
-| 10       | led        | Output    | USB connected indicator      |
+| FPGA Pin | Signal     | Direction | Notes                              |
+|----------|------------|-----------|------------------------------------|
+| 25       | usb_dp     | Bidir     | USB D+ data line (Bank 2, 3.3V)   |
+| 26       | usb_dn     | Bidir     | USB D- data line (Bank 2, 3.3V)   |
+| 27       | usb_dp_pull| Output    | D+ pull-up control (Bank 2, 3.3V) |
+| 52       | clk_27mhz  | Input     | 27MHz on-board oscillator          |
+| 3        | btn        | Input     | User button (active-low)           |
+| 10       | led        | Output    | USB connected indicator            |
 
 ## Schematic
 
@@ -42,19 +42,22 @@ Tang Nano 9K                    USB Type-A Male Plug
                 │       │               │
 USB VBUS ───────┴───────┤               │
                         │               │
-USB D+ ──────┬──────────┤ pin 19        │
+USB D+ ──────┬──────────┤ pin 25        │
              │          │               │
             [22Ω]       │               │
              │          │               │
             [1.5kΩ]     │               │
              │          │               │
-USB D- ──┬───┴──────────┤ pin 18        │
+USB D- ──┬───┴──────────┤ pin 26        │
          │              │               │
         [22Ω]           │               │
          │              │               │
 USB GND ─┼──────────────┤ GND           │
          │              │               │
-        GND             └───────────────┘
+        GND             │               │
+                        │  pin 27 ──────┤── 1.5kΩ ── USB D+
+                        │               │
+                        └───────────────┘
 
 Optional protection (recommended):
 USB D+ ──┬── 3.6V Zener (cathode) ── GND
@@ -76,23 +79,31 @@ USB D- ──┬── 3.6V Zener (cathode) ── GND
 For first test, only 3 resistors needed:
 
 ```
-pin 17 ── 1.5kΩ ── USB D+
-pin 19 ── 22Ω ──── USB D+
-pin 18 ── 22Ω ──── USB D-
+pin 27 ── 1.5kΩ ── USB D+
+pin 25 ── 22Ω ──── USB D+
+pin 26 ── 22Ω ──── USB D-
 GND ────────────── USB GND
 ```
 
 ## Programming
 
 ```bash
-openFPGALoader -b tangnano9k build/usb_keyboard.fs
+openFPGALoader -b tangnano9k build/usb-keyboard-tangnano9k.fs
 ```
 
 ## Testing
 
-1. Build: `make -C boards/tangnano9k DESIGN=examples/03-usb-keyboard/usb-keyboard.lisp`
-2. Program: `openFPGALoader -b tangnano9k build/usb_keyboard.fs`
+1. Build: `make -C boards/tangnano9k TOP=usb-keyboard-tangnano9k -B`
+2. Program: `openFPGALoader -b tangnano9k build/usb-keyboard-tangnano9k.fs`
 3. Connect USB Type-A male plug to host PC
 4. LED on pin 10 should light up (USB connected)
 5. Host should enumerate as HID keyboard
 6. Keyboard will auto-press keys a-z, 0-9 every 2 seconds
+
+## Notes
+
+- Pins 25-27 are in Bank 2 (3.3V LVCMOS33), fully unconnected GPIO with no
+  onboard peripheral conflicts.
+- Pins 17-18 are shared with the BL702 UART bridge and should be avoided for
+  soft USB to prevent bus contention.
+- Pin 20 is VCCFlash (power pin), not a GPIO — do not use for I/O.

@@ -5,6 +5,7 @@
 
 (fab
  (module usb-keyboard-tangnano9k
+   :depends (pll-48mhz usb-keyboard-scanner usb-keyboard-top)
    :board :tangnano9k
    :ports ((clk-27mhz :input)
            (btn :input)

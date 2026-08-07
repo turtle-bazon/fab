@@ -2,6 +2,7 @@
 
 (fab
  (module usbfs-core-top
+  :depends (usbfs-bitlevel usbfs-packet-rx usbfs-packet-tx usbfs-transaction)
   :ports ((rstn :input)
           (clk :input)
           (usb-dp-pull :output 1 :reg)

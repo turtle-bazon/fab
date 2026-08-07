@@ -428,9 +428,49 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 (defvar *boards* (make-hash-table :test 'equal)
   "Registry of defined boards.")
 
+(defun load-depends (mod-form)
+  "Load dependency files listed in :depends option of a module form."
+  (let ((opts (cddr mod-form)))
+    (let ((depends (getf opts :depends)))
+      (when depends
+        (let ((base-dir (when *load-pathname*
+                          (namestring (make-pathname :directory (pathname-directory *load-pathname*))))))
+          (unless base-dir
+            (error ":depends requires file to be loaded via (load ...), not evaluated in REPL"))
+          (dolist (dep depends)
+            (let ((dep-file (format nil "~a~a.lisp" base-dir (string-downcase (symbol-name dep)))))
+              (format t "Loading dependency: ~a~%" dep-file)
+              (load dep-file))))))))
+
+;;; Auto-load board definition if referenced but not yet defined
+
+(defun ensure-board-loaded (mod-form)
+  "If a module form references :board, auto-load the board definition file."
+  (let ((board-name (getf (cddr mod-form) :board)))
+    (when (and board-name (not (gethash (if (symbolp board-name) (symbol-name board-name) board-name) *boards*)))
+      (let* ((name-str (if (symbolp board-name) (string-downcase (symbol-name board-name))
+                           (string-downcase board-name)))
+             (proj-root (namestring (asdf:system-source-directory "fab")))
+             (board-file (merge-pathnames (format nil "boards/~a/~a.lisp" name-str name-str) proj-root)))
+        (when (probe-file board-file)
+          (format t "Auto-loading board: ~a~%" board-file)
+          (load board-file))))))
+
 (defun fab-impl (mod-form)
   "Parse a module, testbench, or board form, emit Verilog/CST, write to *output-dir*/<name>."
-  (let ((kind (sym-name (car mod-form))))
+  ;; Load dependencies first
+  (load-depends mod-form)
+  ;; Auto-load board definition if referenced
+  (ensure-board-loaded mod-form)
+  ;; Strip :depends from form before parsing (parse-module doesn't know about it)
+  (let ((mod-form (let ((opts (cddr mod-form)))
+                    (if (getf opts :depends)
+                        (list* (first mod-form) (second mod-form)
+                               (loop for (key val) on opts by #'cddr
+                                     unless (eq key :depends)
+                                     nconc (list key val)))
+                        mod-form)))
+        (kind (sym-name (car mod-form))))
     (cond
       ((string= kind "BOARD")
        (let ((board (parse-board mod-form)))

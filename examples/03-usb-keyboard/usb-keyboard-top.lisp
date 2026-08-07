@@ -2,6 +2,7 @@
 
 (fab
  (module usb-keyboard-top
+  :depends (usbfs-core-top usbfs-debug-uart-tx usbfs-debug-monitor)
   :ports ((rstn :input)
           (clk :input)
           (usb-dp-pull :output)

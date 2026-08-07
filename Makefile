@@ -1,12 +1,11 @@
 # (fab) — top-level Makefile
-# Generates Verilog from Lisp, then builds bitstream.
 #
 # Usage:
-#   make DESIGN=examples/01-uart-sender/uart-sender.lisp
-#   make DESIGN=examples/01-uart-sender/uart-sender.lisp sim
-#   make DESIGN=examples/01-uart-sender/uart-sender.lisp load
+#   make build                    # build fab binary
+#   make DESIGN=examples/...      # generate + synthesize
 #   make clean
 
+LISP    ?= sbcl
 BOARD    ?= tangnano9k
 BOARD_USB ?= tangnano9k
 DESIGN   ?=
@@ -22,10 +21,10 @@ TOP_V     = $(subst -,_,$(shell echo $(TOP_L) | tr a-z A-Z))
 TB_FILE   = $(dir $(DESIGN))tb.lisp
 TB_EXISTS = $(wildcard $(TB_FILE))
 
-.PHONY: all fab sim load clean
+.PHONY: all fab sim load build clean
 
 all: fab
-	$(MAKE) -C boards/$(BOARD) TOP=$(TOP_L)
+	$(MAKE) -C boards/$(BOARD) TOP=$(TOP_L) BOARD=$(BOARD)
 
 fab: $(BUILD)/$(TOP_V).v
 
@@ -38,6 +37,13 @@ $(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp
 	  --eval '(load "$(DESIGN)")' \
 	  $(if $(TB_EXISTS),--eval '(load "$(TB_FILE)")',)
 
+# Build the fab binary
+build: $(BUILD)/fab
+
+$(BUILD)/fab: src/*.lisp fab.asd build.lisp
+	mkdir -p $(BUILD)/fab
+	$(LISP) --non-interactive --load build.lisp
+
 # Simulate
 sim: fab
 	iverilog -o $(BUILD)/sim_tb.vvp $(BUILD)/$(TOP_V).v $(BUILD)/TB_$(TOP_V).v
@@ -45,7 +51,7 @@ sim: fab
 
 # Flash to board
 load: fab
-	$(MAKE) -C boards/$(BOARD) TOP=$(TOP_L)
+	$(MAKE) -C boards/$(BOARD) TOP=$(TOP_L) BOARD=$(BOARD)
 	openFPGALoader -b $(BOARD_USB) $(BUILD)/$(TOP_L).fs -f
 
 clean:

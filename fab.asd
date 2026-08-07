@@ -5,7 +5,8 @@
   :license "GPL-3.0-or-later"
   :version "0.0.1.0"
   :depends-on (:iterate
-               :metabang-bind)
+               :metabang-bind
+               :clingon)
   :serial t
   :components ((:module "src"
                 :serial t
@@ -13,4 +14,8 @@
                 ((:file "packages")
                  (:file "ir")
                  (:file "emit-verilog")
-                 (:file "fab-macro")))))
+                 (:file "fab-macro")
+                 (:file "main"))))
+  :build-operation "program-op"
+  :build-pathname "build/fab"
+  :entry-point "fab:main")

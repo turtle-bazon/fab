@@ -431,6 +431,11 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 (defvar *module-irs* (make-hash-table :test 'equal)
   "Cache of parsed module IRs, keyed by module name string.")
 
+(defvar *board-dirs* nil
+  "List of directories to search for board definitions.
+Each entry is a pathname. Searched in order; first match wins.
+Set via --board-dir on the command line, or programmatically.")
+
 (defun load-depends (mod-form)
   "Load dependency files listed in :depends option of a module form."
   (let ((opts (cddr mod-form)))
@@ -448,16 +453,25 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 ;;; Auto-load board definition if referenced but not yet defined
 
 (defun ensure-board-loaded (mod-form)
-  "If a module form references :board, auto-load the board definition file."
+  "If a module form references :board, auto-load the board definition file.
+Searches *board-dirs* first, then falls back to the project boards/ directory."
   (let ((board-name (getf (cddr mod-form) :board)))
     (when (and board-name (not (gethash (if (symbolp board-name) (symbol-name board-name) board-name) *boards*)))
       (let* ((name-str (if (symbolp board-name) (string-downcase (symbol-name board-name))
                            (string-downcase board-name)))
-             (proj-root (namestring (asdf:system-source-directory "fab")))
-             (board-file (merge-pathnames (format nil "boards/~a/~a.lisp" name-str name-str) proj-root)))
-        (when (probe-file board-file)
-          (format t "Auto-loading board: ~a~%" board-file)
-          (load board-file))))))
+             (rel-path (format nil "boards/~a/~a.lisp" name-str name-str)))
+        (let ((board-file (or ;; Search *board-dirs* first
+                            (dolist (dir *board-dirs*)
+                              (let ((candidate (merge-pathnames rel-path dir)))
+                                (when (probe-file candidate)
+                                  (return candidate))))
+                            ;; Fall back to project root (development mode)
+                            (ignore-errors
+                              (merge-pathnames rel-path
+                                               (namestring (asdf:system-source-directory "fab")))))))
+          (when board-file
+            (format t "Auto-loading board: ~a~%" board-file)
+            (load board-file)))))))
 
 (defun fab-impl (mod-form)
   "Parse a module, testbench, or board form, emit Verilog/CST, write to *output-dir*/<name>."

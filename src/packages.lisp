@@ -7,4 +7,6 @@
   (:nicknames :fab)
   (:export #:fab
            #:fab-impl
-           #:*output-dir*))
+           #:*output-dir*
+           #:*board-dirs*
+           #:main))

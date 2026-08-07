@@ -194,7 +194,7 @@
                     (3 (setf-nb tp-byte ep83-data))
                     (4 (setf-nb tp-byte ep84-data)))
                   (if (= endp 0)
-                     (setf-nb ep00-resp-idx (+ ep00-resp-idx 1)))))))))))
+                                          (setf-nb ep00-resp-idx (+ ep00-resp-idx 1))))))))))))
 
     ;; Response IN data on endpoint 0 - descriptor lookup
     (always (posedge clk)
@@ -223,7 +223,7 @@
                     (#x03050680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
                                                      (slice descriptor-str5 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
                     (#x03060680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                                     (slice descriptor-str6 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))))))))))
+                                                                                                          (slice descriptor-str6 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))))))))
 
     ;; Process OUT data
     (always (posedge clk (negedge rstn))
@@ -246,7 +246,7 @@
               (1 (begin (setf-nb ep01-data rp-byte) (setf-nb ep01-valid 1)))
               (2 (begin (setf-nb ep02-data rp-byte) (setf-nb ep02-valid 1)))
               (3 (begin (setf-nb ep03-data rp-byte) (setf-nb ep03-valid 1)))
-              (4 (begin (setf-nb ep04-data rp-byte) (setf-nb ep04-valid 1))))))))))
+                            (4 (begin (setf-nb ep04-data rp-byte) (setf-nb ep04-valid 1))))))))
 
     ;; Detect IN/OUT packet border and SOF
     (always (posedge clk (negedge rstn))

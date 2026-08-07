@@ -2,8 +2,8 @@
 # Uses yosys + yowasp-nextpnr-gowin + gowin_pack (Apycula)
 #
 # Usage:
-#   make TOP=usb-keyboard BOARD=tangnano9k    # design + board binding
-#   make TOP=usb-keyboard                     # design only (no CST, won't route)
+#   make TOP=usb-keyboard BOARD=tangnano9k BUILD=../../build
+#   make TOP=usb-keyboard BUILD=/tmp/my-project
 
 export PATH := $(HOME)/.local/bin:$(PATH)
 
@@ -11,10 +11,15 @@ DEVICE   = GW1NR-LV9QN88PC6/I5
 FAMILY   = GW1N-9C
 TOP      ?=
 BOARD    ?=
-BUILD    = ../../build
+BUILD    ?=
 
 # Verilog module name uses underscores: usb-keyboard → USB_KEYBOARD
 TOP_V    = $(subst -,_,$(shell echo $(TOP) | tr a-z A-Z))
+
+# Require BUILD
+ifeq ($(BUILD),)
+  $(error BUILD is not set. Usage: make TOP=name BOARD=name BUILD=path)
+endif
 
 # CST file: if BOARD is set, use TOP_BOARD.cst; else use TOP.cst
 ifeq ($(BOARD),)

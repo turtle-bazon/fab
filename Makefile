@@ -24,7 +24,7 @@ TB_EXISTS = $(wildcard $(TB_FILE))
 .PHONY: all fab sim load build clean
 
 all: fab
-	./fab-board $(BOARD) TOP=$(TOP_L) BOARD=$(BOARD) BUILD=$(BUILD)
+	./fab-board $(BOARD) TOP=$(TOP_L) BUILD=$(BUILD)
 
 fab: $(BUILD)/$(TOP_V).v
 
@@ -51,7 +51,7 @@ sim: fab
 
 # Flash to board
 load: fab
-	./fab-board $(BOARD) TOP=$(TOP_L) BOARD=$(BOARD) BUILD=$(BUILD)
+	./fab-board $(BOARD) TOP=$(TOP_L) BUILD=$(BUILD)
 	openFPGALoader -b $(BOARD_USB) $(BUILD)/$(TOP_L).fs -f
 
 clean:

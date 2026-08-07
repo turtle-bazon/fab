@@ -61,6 +61,9 @@
         (if rx-sta
           (begin
             (setf-nb rp-pid 0)
+            (setf-nb rp-addr 0)
+            (setf-nb rp-byte-en 0)
+            (setf-nb rp-byte 0)
             (setf-nb rx-valid 0)
             (setf-nb rx-bytecnt 0)
             (setf-nb rx-bcnt 0)

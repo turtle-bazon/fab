@@ -22,16 +22,19 @@
    :signals ((state :reg 8 :init 0))
    :localparams ((rx-marker 10)    ; 0xA = "Rx" marker
                  (tx-marker 11))   ; 0xB = "Tx" marker
-    :assigns ((debug-en (if (logor (= state 0) (= state 2) (= state 4))
-                           (if (= state 0) 1
-                             (if (= state 2) (if rp-byte-en 1 0)
-                               (if (= state 4) (if tp-byte-req 1 0) 0)))
-                           (if (= state 1) 1
-                             (if (= state 3) 1 0))))
-              (debug-data (if (= state 0) (concat rx-marker rp-pid)
-                            (if (= state 2) rp-byte
-                              (if (= state 3) (concat tx-marker tp-pid)
-                                (if (= state 4) tp-byte 0))))))
+    :assigns ((debug-en (case state
+                          (0 1)
+                          (1 1)
+                          (2 (if rp-byte-en 1 0))
+                          (3 1)
+                          (4 (if tp-byte-req 1 0))
+                          (otherwise 0)))
+              (debug-data (case state
+                            (0 (concat rx-marker rp-pid))
+                            (2 rp-byte)
+                            (3 (concat tx-marker tp-pid))
+                            (4 tp-byte)
+                            (otherwise 0))))
     :body
     ((always
       (posedge clk)

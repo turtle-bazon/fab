@@ -41,7 +41,7 @@
            )
            (begin
              (setf uart-write-wire 0)
-             (setf led-timer (+ led-timer 1))
+             (incf led-timer)
              (if (= led-timer 13500000)
                (begin
                  (setf led-timer 0)
@@ -63,7 +63,7 @@
                     (begin
                       (setf uart-data-wire alu-result-wire)
                       (setf uart-write-wire 1)
-                      (setf test-char (+ test-char 1))
+                      (incf test-char)
                       (if (= test-char #x5A)
                         (setf ctrl-state 2)
                         (setf ctrl-state 0)

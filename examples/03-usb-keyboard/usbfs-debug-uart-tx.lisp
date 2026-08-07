@@ -15,19 +15,14 @@
              (tx-state :reg 4 :init 0)
              (tx-shift :reg 8 :init 0))
    :body
-   ((always-comb
-     (setf tx-rdy (if (= tx-state 0) 1 0))
-     (case tx-state
-       (0 (setf o-uart-tx 1))
-       (1 (setf o-uart-tx 0))
-       (2 (setf o-uart-tx (bit tx-shift 0)))
-       (3 (setf o-uart-tx (bit tx-shift 1)))
-       (4 (setf o-uart-tx (bit tx-shift 2)))
-       (5 (setf o-uart-tx (bit tx-shift 3)))
-       (6 (setf o-uart-tx (bit tx-shift 4)))
-       (7 (setf o-uart-tx (bit tx-shift 5)))
-       (8 (setf o-uart-tx (bit tx-shift 6)))
-       (otherwise (setf o-uart-tx 1))))
+    ((always-comb
+      (setf tx-rdy (if (= tx-state 0) 1 0))
+      (if (>= tx-state 2)
+        (setf o-uart-tx (bit tx-shift (- tx-state 2)))
+        (case tx-state
+          (0 (setf o-uart-tx 1))
+          (1 (setf o-uart-tx 0))
+          (otherwise (setf o-uart-tx 1)))))
     (always
       (posedge clk)
       (if (= tx-state 0)

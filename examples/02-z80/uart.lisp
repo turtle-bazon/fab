@@ -52,11 +52,11 @@
                        )
                        (begin
                          (setf shift-reg (concat 0 (slice shift-reg 10 1)))
-                         (setf bit-index (+ bit-index 1))
+                         (incf bit-index)
                        )
                      )
                    )
-                   (setf baud-timer (+ baud-timer 1))
+                   (incf baud-timer)
                  )
                )
               )

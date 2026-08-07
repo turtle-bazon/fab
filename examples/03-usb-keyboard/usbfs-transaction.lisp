@@ -134,38 +134,30 @@
                             (begin
                               (setf-nb tp-cnt (zero-extend (slice ep00-total 7 0) 10))
                               (setf-nb ep00-total 0))))
-                          (if (= rp-endp 1)
-                            (if ep81-valid
-                              (begin
-                                (setf-nb tp-pid (if (and ep81-data1 (not ep81-isochronous)) pid-data1 pid-data0))
-                                (setf-nb tp-cnt ep81-maxpktsize)))
-                            (if (= rp-endp 2)
-                              (if ep82-valid
-                                (begin
-                                  (setf-nb tp-pid (if (and ep82-data1 (not ep82-isochronous)) pid-data1 pid-data0))
-                                  (setf-nb tp-cnt ep82-maxpktsize)))
-                              (if (= rp-endp 3)
-                                (if ep83-valid
-                                  (begin
-                                    (setf-nb tp-pid (if (and ep83-data1 (not ep83-isochronous)) pid-data1 pid-data0))
-                                    (setf-nb tp-cnt ep83-maxpktsize)))
-                                (if (= rp-endp 4)
-                                  (if ep84-valid
-                                    (begin
-                                      (setf-nb tp-pid (if (and ep84-data1 (not ep84-isochronous)) pid-data1 pid-data0))
-                                      (setf-nb tp-cnt ep84-maxpktsize))))))))))
-                    (if (= rp-pid pid-ack)
-                      (begin
-                        (if (= endp 0)
-                          (setf-nb ep00-data1 (not ep00-data1))
-                          (if (= endp 1)
-                            (setf-nb ep81-data1 (and (not ep81-data1) (not ep81-isochronous)))
-                            (if (= endp 2)
-                              (setf-nb ep82-data1 (and (not ep82-data1) (not ep82-isochronous)))
-                              (if (= endp 3)
-                                (setf-nb ep83-data1 (and (not ep83-data1) (not ep83-isochronous)))
-                                (if (= endp 4)
-                                  (setf-nb ep84-data1 (and (not ep84-data1) (not ep84-isochronous)))))))))
+                          (case rp-endp
+                            (1 (if ep81-valid
+                                 (begin
+                                   (setf-nb tp-pid (if (and ep81-data1 (not ep81-isochronous)) pid-data1 pid-data0))
+                                   (setf-nb tp-cnt ep81-maxpktsize))))
+                            (2 (if ep82-valid
+                                 (begin
+                                   (setf-nb tp-pid (if (and ep82-data1 (not ep82-isochronous)) pid-data1 pid-data0))
+                                   (setf-nb tp-cnt ep82-maxpktsize))))
+                            (3 (if ep83-valid
+                                 (begin
+                                   (setf-nb tp-pid (if (and ep83-data1 (not ep83-isochronous)) pid-data1 pid-data0))
+                                   (setf-nb tp-cnt ep83-maxpktsize))))
+                            (4 (if ep84-valid
+                                 (begin
+                                   (setf-nb tp-pid (if (and ep84-data1 (not ep84-isochronous)) pid-data1 pid-data0))
+                                   (setf-nb tp-cnt ep84-maxpktsize))))))
+                      (if (= rp-pid pid-ack)
+                       (case endp
+                         (0 (setf-nb ep00-data1 (not ep00-data1)))
+                         (1 (setf-nb ep81-data1 (and (not ep81-data1) (not ep81-isochronous))))
+                         (2 (setf-nb ep82-data1 (and (not ep82-data1) (not ep82-isochronous))))
+                         (3 (setf-nb ep83-data1 (and (not ep83-data1) (not ep83-isochronous))))
+                         (4 (setf-nb ep84-data1 (and (not ep84-data1) (not ep84-isochronous))))))
                       (if (or (= rp-pid pid-data0) (= rp-pid pid-data1))
                         (begin
                           (if (= endp 0)
@@ -204,40 +196,34 @@
                   (if (= endp 0)
                      (setf-nb ep00-resp-idx (+ ep00-resp-idx 1)))))))))))
 
-    ;; Response IN data on endpoint 0
+    ;; Response IN data on endpoint 0 - descriptor lookup
     (always (posedge clk)
       (if (and (>= (slice ep00-setup-cmd 15 8) #x08)
                (= (slice ep00-setup-cmd 7 0) #x80))
         (setf ep00-data (if (>= ep00-resp-idx 1) 0 1))
-        (if (and (= (slice ep00-setup-cmd 31 24) #x01)
-                 (= (slice ep00-setup-cmd 15 0) #x0680))
-          (setf ep00-data (if (>= ep00-resp-idx 18) 0
-                             (slice descriptor-device (+ (* (- 17 ep00-resp-idx) 8) 7) (* (- 17 ep00-resp-idx) 8))))
-          (if (and (= (slice ep00-setup-cmd 31 24) #x02)
-                   (= (slice ep00-setup-cmd 15 0) #x0680))
-            (setf ep00-data (slice descriptor-config (+ (* (- 511 ep00-resp-idx) 8) 7) (* (- 511 ep00-resp-idx) 8)))
-            (if (= ep00-setup-cmd #x03000680)
-              (setf ep00-data (if (>= ep00-resp-idx 4) 0
-                                 (slice descriptor-str0 (+ (* (- 3 ep00-resp-idx) 8) 7) (* (- 3 ep00-resp-idx) 8))))
-              (if (= ep00-setup-cmd #x03010680)
-                (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                   (slice descriptor-str1 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                (if (= ep00-setup-cmd #x03020680)
-                  (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                     (slice descriptor-str2 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                  (if (= ep00-setup-cmd #x03030680)
-                    (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                       (slice descriptor-str3 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                    (if (= ep00-setup-cmd #x03040680)
-                      (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                         (slice descriptor-str4 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                      (if (= ep00-setup-cmd #x03050680)
-                        (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                           (slice descriptor-str5 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                        (if (= ep00-setup-cmd #x03060680)
-                          (setf ep00-data (if (>= ep00-resp-idx 64) 0
-                                             (slice descriptor-str6 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8))))
-                            (setf ep00-data ep00-resp))))))))))))
+        (begin
+          (setf ep00-data ep00-resp)
+          (case (slice ep00-setup-cmd 31 24)
+            (#x01 (if (= (slice ep00-setup-cmd 15 0) #x0680)
+                    (setf ep00-data (if (>= ep00-resp-idx 18) 0
+                                       (slice descriptor-device (+ (* (- 17 ep00-resp-idx) 8) 7) (* (- 17 ep00-resp-idx) 8))))))
+            (#x02 (if (= (slice ep00-setup-cmd 15 0) #x0680)
+                    (setf ep00-data (slice descriptor-config (+ (* (- 511 ep00-resp-idx) 8) 7) (* (- 511 ep00-resp-idx) 8)))))
+            (#x03 (case ep00-setup-cmd
+                    (#x03000680 (setf ep00-data (if (>= ep00-resp-idx 4) 0
+                                                     (slice descriptor-str0 (+ (* (- 3 ep00-resp-idx) 8) 7) (* (- 3 ep00-resp-idx) 8)))))
+                    (#x03010680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str1 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
+                    (#x03020680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str2 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
+                    (#x03030680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str3 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
+                    (#x03040680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str4 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
+                    (#x03050680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str5 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))
+                    (#x03060680 (setf ep00-data (if (>= ep00-resp-idx 64) 0
+                                                     (slice descriptor-str6 (+ (* (- 63 ep00-resp-idx) 8) 7) (* (- 63 ep00-resp-idx) 8)))))))))))))
 
     ;; Process OUT data
     (always (posedge clk (negedge rstn))
@@ -254,17 +240,13 @@
           (setf-nb ep03-data 0) (setf-nb ep03-valid 0)
           (setf-nb ep04-data 0) (setf-nb ep04-valid 0)
           (if rp-byte-en
-            (if (= endp 0)
-              (if ep00-setup
-                (setf-nb ep00-setup-cmd (concat rp-byte (slice ep00-setup-cmd 63 8))))
-              (if (= endp 1)
-                (begin (setf-nb ep01-data rp-byte) (setf-nb ep01-valid 1))
-                (if (= endp 2)
-                  (begin (setf-nb ep02-data rp-byte) (setf-nb ep02-valid 1))
-                  (if (= endp 3)
-                    (begin (setf-nb ep03-data rp-byte) (setf-nb ep03-valid 1))
-                    (if (= endp 4)
-                      (begin (setf-nb ep04-data rp-byte) (setf-nb ep04-valid 1)))))))))))
+            (case endp
+              (0 (if ep00-setup
+                   (setf-nb ep00-setup-cmd (concat rp-byte (slice ep00-setup-cmd 63 8)))))
+              (1 (begin (setf-nb ep01-data rp-byte) (setf-nb ep01-valid 1)))
+              (2 (begin (setf-nb ep02-data rp-byte) (setf-nb ep02-valid 1)))
+              (3 (begin (setf-nb ep03-data rp-byte) (setf-nb ep03-valid 1)))
+              (4 (begin (setf-nb ep04-data rp-byte) (setf-nb ep04-valid 1))))))))))
 
     ;; Detect IN/OUT packet border and SOF
     (always (posedge clk (negedge rstn))

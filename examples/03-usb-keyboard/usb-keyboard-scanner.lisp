@@ -23,10 +23,10 @@
            (setf key-request 0)
            (if (< count 54000000)
              (begin
-               (setf count (+ count 1)))
+               (incf count))
              (begin
                (setf count 0)
                (setf key-request 1)
                (if (< key-val #x0027)
-                 (setf key-val (+ key-val 1))
+                 (incf key-val)
                  (setf key-val #x0004)))))))))))

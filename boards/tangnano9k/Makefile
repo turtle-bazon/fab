@@ -13,9 +13,6 @@ TOP      ?=
 BOARD    ?=
 BUILD    ?=
 
-# Normalize to absolute path (make -C changes directory)
-BUILD := $(abspath $(BUILD))
-
 # Verilog module name uses underscores: usb-keyboard → USB_KEYBOARD
 TOP_V    = $(subst -,_,$(shell echo $(TOP) | tr a-z A-Z))
 

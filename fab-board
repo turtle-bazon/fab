@@ -1,0 +1,41 @@
+#!/bin/bash
+# fab-board — run board Makefile from project root
+# Usage: fab-board <board> TOP=name [BOARD=name] [BUILD=path] [target]
+#
+# Example:
+#   fab-board tangnano9k TOP=usb-keyboard BOARD=tangnano9k BUILD=build/usb-keyboard
+
+if [ $# -lt 2 ]; then
+  echo "Usage: fab-board <board> TOP=name [BOARD=name] [BUILD=path] [target]"
+  exit 1
+fi
+
+BOARD="$1"
+shift
+
+# Resolve BUILD to absolute path from current directory
+ARGS=()
+BUILD_SET=0
+for arg in "$@"; do
+  case "$arg" in
+    BUILD=*)
+      BUILD_VAL="${arg#BUILD=}"
+      # Resolve relative to PWD (where user ran this script)
+      if [[ "$BUILD_VAL" != /* ]]; then
+        BUILD_VAL="$(pwd)/$BUILD_VAL"
+      fi
+      ARGS+=("BUILD=$BUILD_VAL")
+      BUILD_SET=1
+      ;;
+    *)
+      ARGS+=("$arg")
+      ;;
+  esac
+done
+
+if [ "$BUILD_SET" -eq 0 ]; then
+  echo "Error: BUILD is required. Usage: fab-board <board> TOP=name BUILD=path"
+  exit 1
+fi
+
+exec make -C "boards/$BOARD" "${ARGS[@]}"

@@ -1,12 +1,11 @@
-;;; USB HID Keyboard top-level for Tang Nano 9K
+;;; USB HID Keyboard — board-agnostic design
 ;;; Instantiates PLL, keyboard scanner, USB keyboard core, and LED
 
 (in-package :fab)
 
 (fab
- (module usb-keyboard-tangnano9k
+ (module usb-keyboard
    :depends (pll-48mhz usb-keyboard-scanner usb-keyboard-top)
-   :board :tangnano9k
    :ports ((clk-27mhz :input)
            (btn :input)
            (led :output)
@@ -43,3 +42,6 @@
                (usb-rstn usb-rstn)
                (key-value key-value)
                (key-request key-request))))))
+
+;; Board-specific: map design ports to Tang Nano 9K pins
+(fab (board-target usb-keyboard :board :tangnano9k))

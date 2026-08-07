@@ -1,22 +1,18 @@
-;;; USB HID Keyboard - batch loader
+;;; USB HID Keyboard - batch loader (fallback)
 ;;; Loads all modules and generates Verilog into build/
 ;;;
-;;; Usage (from CL REPL):
-;;;   (asdf:load-system "fab")
-;;;   (load "examples/03-usb-keyboard/load.lisp")
-;;;
-;;; Or from shell:
-;;;   sbcl --eval '(asdf:load-system "fab")' --load examples/03-usb-keyboard/load.lisp --quit
+;;; Prefer loading just usb-keyboard.lisp — :depends handles the rest.
+;;; This file exists as a fallback for batch processing.
 
 (in-package :fab)
 
 ;; Set output directory for generated Verilog
 (setf *output-dir* (merge-pathnames "build/" (asdf:system-source-directory "fab")))
 
-;; Board definition (must be loaded first — registers in *boards*)
+;; Board definition
 (load #p"boards/tangnano9k/tangnano9k.lisp")
 
-;; USB keyboard modules (order doesn't matter — they're independent)
+;; USB keyboard modules
 (load #p"examples/03-usb-keyboard/pll-48mhz.lisp")
 (load #p"examples/03-usb-keyboard/usbfs-debug-uart-tx.lisp")
 (load #p"examples/03-usb-keyboard/usbfs-debug-monitor.lisp")

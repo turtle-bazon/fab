@@ -7,7 +7,7 @@
   (write-string
    "Usage: fab [options] <DESIGN>
 
-Generate Verilog (and constraint files) from a (fab) Lisp design file.
+Generate HDL from a (fab) Lisp design file.
 With --board, also compile to FPGA bitstream.
 
 Arguments:
@@ -19,7 +19,7 @@ Options:
     --board NAME            Compile with this board (triggers yosys/nextpnr/gowin_pack)
 
 Examples:
-    fab usb-keyboard.lisp                                  # generate .v only
+    fab usb-keyboard.lisp                                  # generate HDL only
     fab --board tangnano9k usb-keyboard.lisp               # generate + compile
     fab -o rtl/ --board tangnano9k usb-keyboard.lisp       # custom output dir
 
@@ -146,7 +146,7 @@ Examples:
 (defun make-generate-command ()
   (clingon:make-command
    :name "fab"
-   :description "Generate Verilog from (fab) Lisp design files, compile to bitstream with --board"
+   :description "Generate HDL (Verilog, VHDL) from (fab) Lisp design files"
    :version (asdf:component-version (asdf:find-system :fab))
    :options (make-generate-options)
    :handler #'generate-handler))

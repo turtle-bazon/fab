@@ -82,15 +82,15 @@ Examples:
                            output-dir json-file top-v)))
           (format t "$ ~a~%" cmd)
           (uiop:run-program cmd :output t :error-output :interactive))
-        ;; nextpnr: place and route
-        (format t "~%--- Place & route with nextpnr-gowin ---~%")
-        (let ((cmd (format nil "yowasp-nextpnr-gowin --device ~a --family ~a --cst ~a --json ~a --write ~a"
+        ;; nextpnr: place and route (himbaechel)
+        (format t "~%--- Place & route with nextpnr-himbaechel-gowin ---~%")
+        (let ((cmd (format nil "yowasp-nextpnr-himbaechel-gowin --device ~a -o family=~a -o cst=~a --json ~a --write ~a"
                            device family cst-file json-file pnr-file)))
           (format t "$ ~a~%" cmd)
           (uiop:run-program cmd :output t :error-output :interactive))
         ;; gowin_pack: bitstream
         (format t "~%--- Packing with gowin_pack ---~%")
-        (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" family fs-file pnr-file)))
+        (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" device fs-file pnr-file)))
           (format t "$ ~a~%" cmd)
           (uiop:run-program cmd :output t :error-output :interactive))
         (format t "~%Bitstream: ~a~%" fs-file)

@@ -32,8 +32,8 @@ cp build/fab /usr/local/bin/
 # Yosys (synthesis)
 sudo apt install yosys
 
-# nextpnr + gowin_pack (place & route + bitstream)
-pip install yowasp-nextpnr-gowin apycula
+# nextpnr-himbaechel + gowin_pack (place & route + bitstream)
+pip install yowasp-nextpnr-himbaechel-gowin apycula
 ```
 
 ## Usage

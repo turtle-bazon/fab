@@ -37,10 +37,10 @@ $(BUILD)/$(TOP).json: $(BUILD)/$(TOP_V).v $(CST_FILE)
 	yosys -p "read_verilog $(BUILD)/*.v; synth_gowin -json $@ -top $(TOP_V)"
 
 $(BUILD)/$(TOP)_pnr.json: $(BUILD)/$(TOP).json $(CST_FILE)
-	yowasp-nextpnr-gowin --device $(DEVICE) --family $(FAMILY) --cst $(CST_FILE) --json $< --write $@
+	yowasp-nextpnr-himbaechel-gowin --device $(DEVICE) -o family=$(FAMILY) -o cst=$(CST_FILE) --json $< --write $@
 
 $(BUILD)/$(TOP).fs: $(BUILD)/$(TOP)_pnr.json
-	gowin_pack -d $(FAMILY) -o $@ $<
+	gowin_pack -d $(DEVICE) -o $@ $<
 
 clean:
 	rm -f $(BUILD)/$(TOP).json $(BUILD)/$(TOP)_pnr.json $(BUILD)/$(TOP).fs $(CST_FILE)

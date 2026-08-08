@@ -112,7 +112,7 @@ Examples:
                                (string-upcase board-key)))
              (json-file (format nil "~a/~a.json" output-dir top-v))
              (pnr-file (format nil "~a/~a_pnr.json" output-dir top-v))
-             (fs-file (format nil "~a/~a.fs" output-dir top-v)))
+             (fs-file (format nil "~a/~a_~a.fs" output-dir top-v (string-upcase board-key))))
         (run-yosys output-dir top-v json-file)
         (run-nextpnr device family cst-file json-file pnr-file)
         (run-gowin-pack family fs-file pnr-file)

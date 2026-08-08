@@ -51,6 +51,49 @@ Examples:
                    (write-char (char-upcase ch) out)
                    (write-char #\_ out))))))
 
+;;; FPGA build step helpers
+
+(defun run-yosys (output-dir top-v json-file)
+  "Run yosys synthesis. Excludes TB_* files."
+  (format t "~%--- Synthesizing with yosys ---~%")
+  (let ((cmd (format nil "yosys -p \"read_verilog ~a; synth_gowin -json ~a -top ~a\""
+                     (with-output-to-string (s)
+                       (let ((proc (uiop:launch-program
+                                    (format nil "find ~a -maxdepth 1 -name '*.v' ! -name 'TB_*' | sort"
+                                            output-dir)
+                                    :output :stream)))
+                         (loop for line = (read-line (uiop:process-info-output proc) nil nil)
+                               while line
+                               do (write-string line s)
+                                  (write-char #\Space s))
+                         (uiop:wait-process proc)))
+                     json-file top-v)))
+    (format t "$ ~a~%" cmd)
+    (uiop:run-program cmd :output t :error-output :interactive)))
+
+(defun run-nextpnr (device family cst-file json-file pnr-file)
+  "Run nextpnr place and route (himbaechel)."
+  (format t "~%--- Place & route with nextpnr-himbaechel-gowin ---~%")
+  (let ((cmd (format nil "yowasp-nextpnr-himbaechel-gowin --device ~a -o family=~a -o cst=~a --json ~a --write ~a"
+                     device family cst-file json-file pnr-file)))
+    (format t "$ ~a~%" cmd)
+    (uiop:run-program cmd :output t :error-output :interactive)))
+
+(defun run-gowin-pack (device fs-file pnr-file)
+  "Run gowin_pack to generate bitstream."
+  (format t "~%--- Packing with gowin_pack ---~%")
+  (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" device fs-file pnr-file)))
+    (format t "$ ~a~%" cmd)
+    (uiop:run-program cmd :output t :error-output :interactive)))
+
+(defun find-board-target (board-key)
+  "Find the board-target entry for BOARD-KEY in *board-targets*."
+  (find-if (lambda (bt) (string= (if (symbolp (second bt))
+                                     (symbol-name (second bt))
+                                     (string (second bt)))
+                                 board-key))
+           *board-targets*))
+
 (defun compile-board (board-name output-dir)
   "Run yosys → nextpnr → gowin_pack for BOARD-NAME using generated .v and .cst files."
   (let* ((board-key (if (symbolp board-name) (symbol-name board-name)
@@ -58,12 +101,7 @@ Examples:
          (board (gethash board-key *boards*))
          (device (ir-board-device board))
          (family (ir-board-family board)))
-    ;; Find the module that has a board-target for this board
-    (let ((target (find-if (lambda (bt) (string= (if (symbolp (second bt))
-                                                      (symbol-name (second bt))
-                                                      (string (second bt)))
-                                                  board-key))
-                           *board-targets*)))
+    (let ((target (find-board-target board-key)))
       (unless target
         (error "No board-target found for board ~a" board-name))
       (let* ((mod-name (first target))
@@ -76,35 +114,33 @@ Examples:
              (json-file (format nil "~a/~a.json" output-dir top-v))
              (pnr-file (format nil "~a/~a_pnr.json" output-dir top-v))
              (fs-file (format nil "~a/~a.fs" output-dir top-v)))
-        ;; yosys: synthesis — exclude TB_* files
-        (format t "~%--- Synthesizing with yosys ---~%")
-        (let ((cmd (format nil "yosys -p \"read_verilog ~a; synth_gowin -json ~a -top ~a\""
-                           (with-output-to-string (s)
-                             (let ((proc (uiop:launch-program
-                                          (format nil "find ~a -maxdepth 1 -name '*.v' ! -name 'TB_*' | sort"
-                                                  output-dir)
-                                          :output :stream)))
-                               (loop for line = (read-line (uiop:process-info-output proc) nil nil)
-                                     while line
-                                     do (write-string line s)
-                                        (write-char #\Space s))
-                               (uiop:wait-process proc)))
-                           json-file top-v)))
-          (format t "$ ~a~%" cmd)
-          (uiop:run-program cmd :output t :error-output :interactive))
-        ;; nextpnr: place and route (himbaechel)
-        (format t "~%--- Place & route with nextpnr-himbaechel-gowin ---~%")
-        (let ((cmd (format nil "yowasp-nextpnr-himbaechel-gowin --device ~a -o family=~a -o cst=~a --json ~a --write ~a"
-                           device family cst-file json-file pnr-file)))
-          (format t "$ ~a~%" cmd)
-          (uiop:run-program cmd :output t :error-output :interactive))
-        ;; gowin_pack: bitstream
-        (format t "~%--- Packing with gowin_pack ---~%")
-        (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" device fs-file pnr-file)))
-          (format t "$ ~a~%" cmd)
-          (uiop:run-program cmd :output t :error-output :interactive))
+        (run-yosys output-dir top-v json-file)
+        (run-nextpnr device family cst-file json-file pnr-file)
+        (run-gowin-pack device fs-file pnr-file)
         (format t "~%Bitstream: ~a~%" fs-file)
         fs-file))))
+
+;;; CLI helpers
+
+(defun board-key-string (board-name)
+  "Convert board-name to a string key for hash lookup."
+  (if (symbolp board-name) (symbol-name board-name)
+      (string-upcase (string board-name))))
+
+(defun load-board-and-binding (input board-name)
+  "Load board definition and binding file for BOARD-NAME."
+  (let* ((board-key (board-key-string board-name))
+         (design-dir (namestring (make-pathname :directory (pathname-directory input))))
+         (binding-file (format nil "~a~a.lisp" design-dir
+                               (string-downcase (if (symbolp board-name)
+                                                    (symbol-name board-name)
+                                                    board-name)))))
+    (unless (gethash board-key *boards*)
+      (ensure-board-loaded (list 'module nil :board board-name)))
+    (when (probe-file binding-file)
+      (format t "Loading binding: ~a~%" binding-file)
+      (load binding-file))
+    board-key))
 
 (defun generate-handler (cmd)
   (handler-case
@@ -127,21 +163,8 @@ Examples:
           (load input)
           ;; Load board binding if --board specified
           (when board-name
-            (let* ((board-key (if (symbolp board-name) (symbol-name board-name)
-                                  (string-upcase (string board-name))))
-                   (design-dir (namestring (make-pathname :directory (pathname-directory input))))
-                   (binding-file (format nil "~a~a.lisp" design-dir
-                                          (string-downcase (if (symbolp board-name)
-                                                               (symbol-name board-name)
-                                                               board-name)))))
-              ;; Load board definition if not yet loaded
-              (unless (gethash board-key *boards*)
-                (ensure-board-loaded (list 'module nil :board board-name)))
-              ;; Load binding file if it exists
-              (when (probe-file binding-file)
-                (format t "Loading binding: ~a~%" binding-file)
-                (load binding-file))
-              (compile-board board-name output-dir)))
+            (load-board-and-binding input board-name)
+            (compile-board board-name output-dir))
           (format t "Done.~%")))
     (file-error ()
       (format *error-output* "Cannot write output file.~%")

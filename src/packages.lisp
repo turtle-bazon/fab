@@ -9,4 +9,5 @@
            #:fab-impl
            #:*output-dir*
            #:*board-dirs*
+           #:*board-targets*
            #:main))

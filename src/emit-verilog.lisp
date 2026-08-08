@@ -421,19 +421,21 @@
         (name (ir-instance-name inst))
         (params (ir-instance-params inst))
         (ports (ir-instance-ports inst)))
-    (if params
-        (progn
-          (format stream "~a #(" (verilog-ident module))
-          (format stream "~%")
-          (loop for (p . rest) on params
-                do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
-                           (if rest "," "")))
-          (format stream ") ~a (~%" (verilog-ident name)))
-        (format stream "~a ~a (~%" (verilog-ident module) (verilog-ident name)))
-    (loop for (p . rest) on ports
-          do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
-                     (if rest "," "")))
-    (format stream ");~%")))
+    ;; String module names are used as-is (for primitives like "rPLL")
+    (let ((mod-str (if (stringp module) module (verilog-ident module))))
+      (if params
+          (progn
+            (format stream "~a #(" mod-str)
+            (format stream "~%")
+            (loop for (p . rest) on params
+                  do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
+                             (if rest "," "")))
+            (format stream ") ~a (~%" (verilog-ident name)))
+          (format stream "~a ~a (~%" mod-str (verilog-ident name)))
+      (loop for (p . rest) on ports
+            do (format stream "    .~a(~a)~a~%" (verilog-ident (car p)) (emit-expr-to-string (cdr p))
+                       (if rest "," "")))
+      (format stream ");~%"))))
 
 
 (defun emit-testbench (stream tb)

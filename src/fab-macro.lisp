@@ -436,6 +436,10 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 Each entry is a pathname. Searched in order; first match wins.
 Set via --board-dir on the command line, or programmatically.")
 
+(defvar *board-targets* nil
+  "List of (module-name board-name) pairs registered during loading.
+Used by the compile step to know which modules need FPGA compilation.")
+
 (defun load-depends (mod-form)
   "Load dependency files listed in :depends option of a module form."
   (let ((opts (cddr mod-form)))
@@ -522,10 +526,12 @@ Searches *board-dirs* first, then falls back to the project boards/ directory."
                                       (string-upcase (if (symbolp board-name)
                                                          (symbol-name board-name)
                                                          board-name)))))
-                 (with-open-file (s cstfile :direction :output :if-exists :supersede)
-                   (emit-cst s mod board))
-                 (format t "Emitted ~a~%" cstfile)
-                 cstfile))))))
+                (with-open-file (s cstfile :direction :output :if-exists :supersede)
+                  (emit-cst s mod board))
+                (format t "Emitted ~a~%" cstfile)
+                ;; Track for compilation step
+                (push (list (ir-module-name mod) board-name) *board-targets*)
+                cstfile))))))
       ((string= kind "TESTBENCH")
        (let ((tb (parse-testbench mod-form)))
          (ensure-directories-exist *output-dir*)

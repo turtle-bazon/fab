@@ -470,6 +470,9 @@ Set to a different path to redirect output: (let ((*output-dir* \"rtl\")) ...)")
 Each entry is a pathname. Searched in order; first match wins.
 Set via --board-dir on the command line, or programmatically.")
 
+(defvar *last-loaded-module* nil
+  "Name of the last module loaded via fab-impl-module. Used for automatic board-target generation.")
+
 (defvar *board-targets* nil
   "List of (module-name board-name) pairs registered during loading.
 Used by the compile step to know which modules need FPGA compilation.")
@@ -516,7 +519,7 @@ Searches *board-dirs* first, then falls back to the project boards/ directory."
 (defun fab-impl-board (mod-form)
   "Handle a board top-level form."
   (let ((board (parse-board mod-form)))
-    (setf (gethash (symbol-name (ir-board-name board)) *boards*) board)
+    (setf (gethash (string-downcase (symbol-name (ir-board-name board))) *boards*) board)
     (format t "Defined board ~a~%" (ir-board-name board))
     nil))
 
@@ -524,6 +527,7 @@ Searches *board-dirs* first, then falls back to the project boards/ directory."
   "Handle a module top-level form."
   (let ((mod (parse-module mod-form)))
     (setf (gethash (string-downcase (symbol-name (ir-module-name mod))) *module-irs*) mod)
+    (setf *last-loaded-module* (ir-module-name mod))
     (ensure-directories-exist *output-dir*)
     (let ((outfile (format nil "~a/~a.v" *output-dir* (verilog-ident (ir-module-name mod)))))
       (with-open-file (s outfile :direction :output :if-exists :supersede)
@@ -539,7 +543,9 @@ Searches *board-dirs* first, then falls back to the project boards/ directory."
     (unless board-name (error "board-target requires :board"))
     (let ((mod-key (if (symbolp mod-name) (string-downcase (symbol-name mod-name))
                        (string-downcase mod-name)))
-          (board-key (if (symbolp board-name) (symbol-name board-name) board-name)))
+          (board-key (if (symbolp board-name)
+                         (string-downcase (symbol-name board-name))
+                         (string-downcase board-name))))
       (let ((mod (gethash mod-key *module-irs*)))
         (unless mod (error "Module ~a not found in *module-irs*. Load the module file first." mod-name))
         (let ((board (gethash board-key *boards*)))
@@ -547,9 +553,7 @@ Searches *board-dirs* first, then falls back to the project boards/ directory."
           (ensure-directories-exist *output-dir*)
           (let ((cstfile (format nil "~a/~a_~a.cst" *output-dir*
                                  (verilog-ident (ir-module-name mod))
-                                 (string-upcase (if (symbolp board-name)
-                                                    (symbol-name board-name)
-                                                    board-name)))))
+                                 (string-upcase board-key))))
            (with-open-file (s cstfile :direction :output :if-exists :supersede)
              (emit-cst s mod board))
            (format t "Emitted ~a~%" cstfile)

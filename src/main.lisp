@@ -96,8 +96,9 @@ Examples:
 
 (defun compile-board (board-name output-dir)
   "Run yosys → nextpnr → gowin_pack for BOARD-NAME using generated .v and .cst files."
-  (let* ((board-key (if (symbolp board-name) (symbol-name board-name)
-                        (string-upcase (string board-name))))
+  (let* ((board-key (if (symbolp board-name)
+                        (string-downcase (symbol-name board-name))
+                        (string-downcase (string board-name))))
          (board (gethash board-key *boards*))
          (device (ir-board-device board))
          (family (ir-board-family board)))
@@ -108,9 +109,7 @@ Examples:
              (mod-name-str (if (symbolp mod-name) (symbol-name mod-name) (string mod-name)))
              (top-v (verilog-ident mod-name-str))
              (cst-file (format nil "~a/~a_~a.cst" output-dir top-v
-                               (string-upcase (if (symbolp board-name)
-                                                  (symbol-name board-name)
-                                                  board-name))))
+                               (string-upcase board-key)))
              (json-file (format nil "~a/~a.json" output-dir top-v))
              (pnr-file (format nil "~a/~a_pnr.json" output-dir top-v))
              (fs-file (format nil "~a/~a.fs" output-dir top-v)))
@@ -122,26 +121,6 @@ Examples:
 
 ;;; CLI helpers
 
-(defun board-key-string (board-name)
-  "Convert board-name to a string key for hash lookup."
-  (if (symbolp board-name) (symbol-name board-name)
-      (string-upcase (string board-name))))
-
-(defun load-board-and-binding (input board-name)
-  "Load board definition and binding file for BOARD-NAME."
-  (let* ((board-key (board-key-string board-name))
-         (design-dir (namestring (make-pathname :directory (pathname-directory input))))
-         (binding-file (format nil "~a~a.lisp" design-dir
-                               (string-downcase (if (symbolp board-name)
-                                                    (symbol-name board-name)
-                                                    board-name)))))
-    (unless (gethash board-key *boards*)
-      (ensure-board-loaded (list 'module nil :board board-name)))
-    (when (probe-file binding-file)
-      (format t "Loading binding: ~a~%" binding-file)
-      (load binding-file))
-    board-key))
-
 (defun generate-handler (cmd)
   (handler-case
       (progn
@@ -152,8 +131,9 @@ Examples:
                (board-name (clingon:getopt cmd :board)))
           ;; Set output directory
           (setf *output-dir* output-dir)
-          ;; Reset board targets for this run
+          ;; Reset state for this run
           (setf *board-targets* nil)
+          (setf *last-loaded-module* nil)
           ;; Set board search directories
           (setf *board-dirs*
                 (mapcar (lambda (d) (merge-pathnames (format nil "~a" d) #p""))
@@ -161,9 +141,15 @@ Examples:
           ;; Load the design file
           (format t "Generating from ~a -> ~a~%" input output-dir)
           (load input)
-          ;; Load board binding if --board specified
+          ;; Compile with board if --board specified
           (when board-name
-            (load-board-and-binding input board-name)
+            (ensure-board-loaded (list 'module nil :board board-name))
+            ;; Auto-create board-target for the last loaded module if none exist
+            (unless *board-targets*
+              (unless *last-loaded-module*
+                (error "No module found in design file"))
+              (fab-impl-board-target
+               (list 'board-target *last-loaded-module* :board board-name)))
             (compile-board board-name output-dir))
           (format t "Done.~%")))
     (file-error ()

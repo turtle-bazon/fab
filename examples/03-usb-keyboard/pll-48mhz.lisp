@@ -54,5 +54,4 @@
     (defparam u-pll.clkoutd-bypass "false")
     (defparam u-pll.dyn-sdiv-sel 2)
     (defparam u-pll.clkoutd-src "CLKOUT")
-    (defparam u-pll.clkoutd3-src "CLKOUT")
-    (defparam u-pll.device "GW1NR-9C"))))
+    (defparam u-pll.clkoutd3-src "CLKOUT"))))

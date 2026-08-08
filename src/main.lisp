@@ -146,7 +146,7 @@ Examples:
 (defun make-generate-command ()
   (clingon:make-command
    :name "fab"
-   :description "Generate Verilog from (fab) Lisp design files"
+   :description "Generate Verilog from (fab) Lisp design files, compile to bitstream with --board"
    :version (asdf:component-version (asdf:find-system :fab))
    :options (make-generate-options)
    :handler #'generate-handler))

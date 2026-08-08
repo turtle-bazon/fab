@@ -2,18 +2,15 @@
 
 (fab
  (module usb-keyboard-top
-  :depends (usbfs-core-top usbfs-debug-uart-tx usbfs-debug-monitor)
+  :depends (usbfs-core-top)
   :ports ((rstn :input)
           (clk :input)
           (usb-dp-pull :output)
           (usb-dp :inout)
           (usb-dn :inout)
           (usb-rstn :output)
-          (key-value :input 16)
-          (key-request :input)
-          (debug-en :output)
-          (debug-data :output 8)
-          (debug-uart-tx :output))
+           (key-value :input 16)
+           (key-request :input))
 
   :params ((debug "FALSE"))
 
@@ -25,8 +22,6 @@
             (ep00-resp-idx :wire 9)
             (ep00-resp :reg 8)
             (descriptor-hid :wire 504))
-
-  :localparams ((descriptor-str0 #x04030904))
 
   :assigns ((descriptor-hid #x05010906A101050719E029E71500250175019508810295017508810395057501050819012905910295017503910395067508150025FF0507190029658100C0))
 
@@ -41,7 +36,7 @@
       (begin
         (if (= in-cnt 0)
           (begin
-            (setf-nb in-data (concat (slice key-value 7 0) 0 (slice key-value 15 8)))
+            (setf-nb in-data (concat (slice key-value 15 8) 0 (slice key-value 7 0)))
             (if key-request
               (begin
                 (setf-nb in-valid 1)
@@ -115,8 +110,5 @@
       (ep02-valid )
       (ep03-data )
       (ep03-valid )
-      (ep04-data )
-      (ep04-valid )
-      (debug-en debug-en)
-      (debug-data debug-data)
-      (debug-uart-tx debug-uart-tx))))))
+       (ep04-data )
+       (ep04-valid ))))))

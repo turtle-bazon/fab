@@ -21,10 +21,7 @@
           (ep01-data :output 8) (ep01-valid :output)
           (ep02-data :output 8) (ep02-valid :output)
           (ep03-data :output 8) (ep03-valid :output)
-          (ep04-data :output 8) (ep04-valid :output)
-          (debug-en :output)
-          (debug-data :output 8)
-          (debug-uart-tx :output))
+           (ep04-data :output 8) (ep04-valid :output))
 
   :params ((descriptor-device 0)
            (descriptor-str1 0)

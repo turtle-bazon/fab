@@ -6,7 +6,6 @@
 
 (fab
  (module uart-sender
-   :board :tangnano9k
    :ports ((clk :input) (uart-tx :output) (led :output))
    :params ((baud-rate 115200) (clk-freq 27000000))
    :localparams ((baud-count (/ clk-freq baud-rate))

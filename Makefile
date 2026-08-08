@@ -2,14 +2,17 @@
 #
 # Usage:
 #   make build                    # build fab binary
-#   make DESIGN=examples/...      # generate + synthesize
+#   make DESIGN=examples/...      # generate HDL only
+#   make DESIGN=examples/... BOARD=tangnano9k  # generate + compile to bitstream
 #   make clean
 
 LISP    ?= sbcl
 BOARD    ?= tangnano9k
-BOARD_USB ?= tangnano9k
 DESIGN   ?=
 BUILD     = build
+
+# Board binding file: $(dir DESIGN)/$(BOARD).lisp by default
+BOARD_BINDING = $(dir $(DESIGN))$(BOARD).lisp
 
 # Bitstream name from filename: foo.lisp → foo
 TOP_L     = $(basename $(notdir $(DESIGN)))
@@ -21,21 +24,29 @@ TOP_V     = $(subst -,_,$(shell echo $(TOP_L) | tr a-z A-Z))
 TB_FILE   = $(dir $(DESIGN))tb.lisp
 TB_EXISTS = $(wildcard $(TB_FILE))
 
-.PHONY: all fab sim load build clean
+.PHONY: all verilog sim load build clean
 
-all: fab
-	./fab-board $(BOARD) TOP=$(TOP_L) BUILD=$(BUILD)
+# Default: generate Verilog if DESIGN is set, compile if BOARD is also set
+all: verilog
 
-fab: $(BUILD)/$(TOP_V).v
+# Generate HDL only
+verilog: $(BUILD)/$(TOP_V).v
 
-$(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp
+$(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp $(BOARD_BINDING)
 	mkdir -p $(BUILD)
 	sbcl --noinform --non-interactive \
 	  --eval '(require :asdf)' \
 	  --eval '(asdf:load-system :fab)' \
 	  --eval '(load "boards/$(BOARD)/$(BOARD).lisp")' \
 	  --eval '(load "$(DESIGN)")' \
+	  --eval '(load "$(BOARD_BINDING)")' \
 	  $(if $(TB_EXISTS),--eval '(load "$(TB_FILE)")',)
+
+# Generate + compile to bitstream (uses fab binary)
+compile: $(BUILD)/$(TOP_L).fs
+
+$(BUILD)/$(TOP_L).fs: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp $(BOARD_BINDING) $(BUILD)/fab $(BUILD)/$(TOP_V).v
+	$(BUILD)/fab --board-dir boards --board $(BOARD) -o $(BUILD) $(DESIGN)
 
 # Build the fab binary
 build: $(BUILD)/fab
@@ -48,15 +59,13 @@ $(BUILD)/fab: src/*.lisp fab.asd
 	  --eval '(asdf:make "fab")'
 
 # Simulate
-sim: fab
+sim: verilog
 	iverilog -o $(BUILD)/sim_tb.vvp $(BUILD)/$(TOP_V).v $(BUILD)/TB_$(TOP_V).v
 	vvp $(BUILD)/sim_tb.vvp
 
 # Flash to board
-load: fab
-	./fab-board $(BOARD) TOP=$(TOP_L) BUILD=$(BUILD)
-	openFPGALoader -b $(BOARD_USB) $(BUILD)/$(TOP_L).fs -f
+load: compile
+	openFPGALoader -b $(BOARD) $(BUILD)/$(TOP_L).fs -f
 
 clean:
 	rm -rf $(BUILD)
-	./fab-board $(BOARD) clean BUILD=$(BUILD)

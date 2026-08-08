@@ -70,20 +70,24 @@ fab -b /usr/share/fab/boards --board tangnano9k design.lisp
 
 ## Design Files
 
-A design is a `.lisp` file with `(fab)` forms:
+A design is a `.lisp` file with `(fab)` forms. Design files are **board-agnostic** — pin mappings go in a separate binding file.
 
 ```lisp
+;; my-design.lisp — board-agnostic design
 (in-package :fab)
 
-;; Module — generates <name>.v
 (fab
  (module my-design
    :ports ((clk :input)
            (led :output))
    :assigns ((led clk))
    :body ()))
+```
 
-;; Board binding — generates <name>_<board>.cst
+```lisp
+;; tangnano9k.lisp — board binding (in same directory)
+(in-package :fab)
+
 (fab (board-target my-design :board :tangnano9k))
 ```
 
@@ -103,13 +107,13 @@ A design is a `.lisp` file with `(fab)` forms:
 
 ### Board-target form
 
-Maps design ports to physical FPGA pins:
+Maps design ports to physical FPGA pins. Lives in a separate file (e.g., `tangnano9k.lisp`) next to the design:
 
 ```lisp
 (fab (board-target my-design :board :tangnano9k))
 ```
 
-The board definition file lives at `boards/<name>/<name>.lisp`.
+The fab binary auto-discovers `<board>.lisp` in the design's directory when `--board` is specified.
 
 ## DSL Reference
 
@@ -256,15 +260,12 @@ fab/
   boards/
     tangnano9k/
       tangnano9k.lisp   Board definition
-      Makefile          FPGA toolchain (standalone)
   examples/
     01-uart-sender/     Simple UART
     02-z80/             Z80 CPU
     03-usb-keyboard/    USB HID keyboard
   build/                Generated output (gitignored)
-  build.lisp            Binary build driver
   fab.asd               ASDF system definition
-  fab-board             Board Makefile wrapper
   Makefile              Top-level build
 ```
 

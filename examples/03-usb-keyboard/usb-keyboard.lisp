@@ -42,6 +42,3 @@
                (usb-rstn usb-rstn)
                (key-value key-value)
                (key-request key-request))))))
-
-;; Board-specific: map design ports to Tang Nano 9K pins
-(fab (board-target usb-keyboard :board :tangnano9k))

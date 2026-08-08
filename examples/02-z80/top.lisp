@@ -2,7 +2,7 @@
 
 (fab
  (module z80
-   :board tangnano9k
+   :depends (z80-alu z80-regfile z80-uart)
    :ports ((clk :input) (rst :input) (led :output)
            (uart-tx :output))
    :signals ((led-state :reg)
@@ -93,4 +93,5 @@
      ((clk clk) (rst rst) (tx uart-tx-pin)
       (busy uart-busy-alu) (data-in uart-data-wire)
       (write-enable uart-write-wire)))
-   )))
+    )))
+

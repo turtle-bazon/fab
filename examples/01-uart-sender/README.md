@@ -5,7 +5,7 @@ The FPGA runs at 27 MHz using the onboard oscillator (no PLL).
 
 ## Files
 
-- `uart-sender.lisp` — `(fab)` DSL source for the design module
+- `uart-sender.lisp` — `(fab)` DSL source for the design module + board target
 - `tb.lisp` — `(fab)` DSL source for the testbench
 - `README.md` — this file
 
@@ -32,15 +32,19 @@ cat /dev/ttyUSB1
 
 ## DSL Syntax Reference
 
-### Design modules
+### Design modules (board-agnostic)
 ```lisp
 (fab
- (module name :board :board-name
+ (module name
+   :depends (dep1 dep2)
    :ports ((name :input) (name :output))
    :params ((name value))
    :signals ((name :reg width) (name :reg 2 :attrs ((fsm_encoding "binary"))))
    :assigns ((lhs rhs))
    :body ((always (posedge clk) ...))))
+
+;; Board-specific: map design ports to FPGA pins
+(fab (board-target name :board :board-name))
 ```
 
 ### Board definitions
@@ -57,6 +61,7 @@ cat /dev/ttyUSB1
 ```lisp
 (fab
  (testbench name
+   :depends (module-name)
    :signals ((name :reg) (name :wire))
    :body
    ((instance module-name (inst-name) ((param val) ...) ((port signal) ...))

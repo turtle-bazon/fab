@@ -69,17 +69,27 @@ Examples:
       (let* ((mod-name (first target))
              (mod-name-str (if (symbolp mod-name) (symbol-name mod-name) (string mod-name)))
              (top-v (verilog-ident mod-name-str))
-             (board-v (string-upcase (if (symbolp board-name)
-                                         (symbol-name board-name)
-                                         board-name)))
-             (cst-file (format nil "~a/~a_~a.cst" output-dir top-v board-v))
+             (cst-file (format nil "~a/~a_~a.cst" output-dir top-v
+                               (string-upcase (if (symbolp board-name)
+                                                  (symbol-name board-name)
+                                                  board-name))))
              (json-file (format nil "~a/~a.json" output-dir top-v))
              (pnr-file (format nil "~a/~a_pnr.json" output-dir top-v))
              (fs-file (format nil "~a/~a.fs" output-dir top-v)))
-        ;; yosys: synthesis
+        ;; yosys: synthesis — exclude TB_* files
         (format t "~%--- Synthesizing with yosys ---~%")
-        (let ((cmd (format nil "yosys -p \"read_verilog ~a/*.v; synth_gowin -json ~a -top ~a\""
-                           output-dir json-file top-v)))
+        (let ((cmd (format nil "yosys -p \"read_verilog ~a; synth_gowin -json ~a -top ~a\""
+                           (with-output-to-string (s)
+                             (let ((proc (uiop:launch-program
+                                          (format nil "find ~a -maxdepth 1 -name '*.v' ! -name 'TB_*' | sort"
+                                                  output-dir)
+                                          :output :stream)))
+                               (loop for line = (read-line (uiop:process-info-output proc) nil nil)
+                                     while line
+                                     do (write-string line s)
+                                        (write-char #\Space s))
+                               (uiop:wait-process proc)))
+                           json-file top-v)))
           (format t "$ ~a~%" cmd)
           (uiop:run-program cmd :output t :error-output :interactive))
         ;; nextpnr: place and route (himbaechel)
@@ -115,9 +125,23 @@ Examples:
           ;; Load the design file
           (format t "Generating from ~a -> ~a~%" input output-dir)
           (load input)
-          ;; Compile if --board specified
+          ;; Load board binding if --board specified
           (when board-name
-            (compile-board board-name output-dir))
+            (let* ((board-key (if (symbolp board-name) (symbol-name board-name)
+                                  (string-upcase (string board-name))))
+                   (design-dir (namestring (make-pathname :directory (pathname-directory input))))
+                   (binding-file (format nil "~a~a.lisp" design-dir
+                                          (string-downcase (if (symbolp board-name)
+                                                               (symbol-name board-name)
+                                                               board-name)))))
+              ;; Load board definition if not yet loaded
+              (unless (gethash board-key *boards*)
+                (ensure-board-loaded (list 'module nil :board board-name)))
+              ;; Load binding file if it exists
+              (when (probe-file binding-file)
+                (format t "Loading binding: ~a~%" binding-file)
+                (load binding-file))
+              (compile-board board-name output-dir)))
           (format t "Done.~%")))
     (file-error ()
       (format *error-output* "Cannot write output file.~%")

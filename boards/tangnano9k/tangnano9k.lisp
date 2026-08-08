@@ -15,6 +15,7 @@
           (led3 13)
           (led4 14)
           (led5 15)
+          (rst 3)
           (btn1 3)
           (btn2 4)
           (btn 3)

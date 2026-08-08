@@ -5,6 +5,7 @@
 
 (fab
  (testbench tb-UART-SENDER
+   :depends (uart-sender)
    :signals ((clk :reg) (uart-tx :wire))
    :body
    ((instance uart-sender (uut)

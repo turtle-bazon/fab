@@ -79,10 +79,10 @@ Examples:
     (format t "$ ~a~%" cmd)
     (uiop:run-program cmd :output t :error-output :interactive)))
 
-(defun run-gowin-pack (device fs-file pnr-file)
+(defun run-gowin-pack (family fs-file pnr-file)
   "Run gowin_pack to generate bitstream."
   (format t "~%--- Packing with gowin_pack ---~%")
-  (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" device fs-file pnr-file)))
+  (let ((cmd (format nil "gowin_pack -d ~a -o ~a ~a" family fs-file pnr-file)))
     (format t "$ ~a~%" cmd)
     (uiop:run-program cmd :output t :error-output :interactive)))
 
@@ -115,7 +115,7 @@ Examples:
              (fs-file (format nil "~a/~a.fs" output-dir top-v)))
         (run-yosys output-dir top-v json-file)
         (run-nextpnr device family cst-file json-file pnr-file)
-        (run-gowin-pack device fs-file pnr-file)
+        (run-gowin-pack family fs-file pnr-file)
         (format t "~%Bitstream: ~a~%" fs-file)
         fs-file))))
 

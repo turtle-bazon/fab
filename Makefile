@@ -40,9 +40,12 @@ $(BUILD)/$(TOP_V).v: $(DESIGN) src/*.lisp fab.asd boards/$(BOARD)/$(BOARD).lisp
 # Build the fab binary
 build: $(BUILD)/fab
 
-$(BUILD)/fab: src/*.lisp fab.asd build.lisp
-	mkdir -p $(BUILD)/fab
-	$(LISP) --non-interactive --load build.lisp
+$(BUILD)/fab: src/*.lisp fab.asd
+	$(LISP) --non-interactive \
+	  --eval '(require :asdf)' \
+	  --eval '(asdf:load-system :fab)' \
+	  --eval '(ensure-directories-exist #p"$(BUILD)/fab")' \
+	  --eval '(asdf:make "fab")'
 
 # Simulate
 sim: fab
